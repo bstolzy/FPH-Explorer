@@ -8,25 +8,28 @@
   <style>
     html,body{height:100%;margin:0}
     #wrap{display:flex;flex-direction:column;height:100%}
-    #top{padding:6px 10px;border-bottom:1px solid #ddd;font:14px system-ui,Arial}
+    #top{padding:6px 10px;border-bottom:1px solid #ddd;font:14px system-ui,Arial;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
     #maps{display:flex;flex:1;min-height:0}
     #map-wsa,#map-vol{flex:1}
-    #sliderWrap{padding:6px 10px;border-top:1px solid #ddd;font:12px system-ui}
+    #sliderWrap{padding:6px 10px;border-top:1px solid #ddd;font:12px system-ui;display:flex;align-items:center;gap:8px}
     #ts{width:100%}
-    .label{font-weight:600;margin-right:8px}
+    .label{font-weight:600;margin-right:4px}
     .legend{display:inline-flex;gap:6px;align-items:center;margin-left:10px}
     .swatch{width:14px;height:14px;border:1px solid #888}
+    #status{position:fixed;left:8px;bottom:8px;background:#fff;padding:6px 8px;border:1px solid #ccc;border-radius:6px;font:12px system-ui;max-width:60vw}
   </style>
 </head>
 <body>
 <div id="wrap">
   <div id="top">
-    <span class="label">Basemap:</span>
-    <select id="basemap">
-      <option value="osm" selected>OpenStreetMap</option>
-      <option value="esri">Satellite (Esri)</option>
-    </select>
-    <span class="legend">
+    <div>
+      <span class="label">Basemap:</span>
+      <select id="basemap">
+        <option value="osm" selected>OpenStreetMap</option>
+        <option value="esri">Satellite (Esri)</option>
+      </select>
+    </div>
+    <div class="legend">
       <span>Low</span>
       <span class="swatch" id="sw0"></span>
       <span class="swatch" id="sw1"></span>
@@ -34,7 +37,11 @@
       <span class="swatch" id="sw3"></span>
       <span class="swatch" id="sw4"></span>
       <span>High</span>
-    </span>
+    </div>
+    <div style="margin-left:auto">
+      <span class="label">Metric windows:</span>
+      <span>Left = WSA (m²)</span> | <span>Right = Volume (ML)</span>
+    </div>
   </div>
 
   <div id="maps">
@@ -49,12 +56,17 @@
   </div>
 </div>
 
+<div id="status">Booting…</div>
+
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://unpkg.com/papaparse@5.3.2/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
 <script>
 /* -------------------- Config & helpers -------------------- */
+const STATUS = document.getElementById('status');
+const setStatus = (m)=>{ STATUS.textContent = m; console.log('[STATUS]', m); };
+
 const DATA = {
   polys: encodeURI('data/geeid_all_wb_1796.geojson'),
   catchments: encodeURI('data/Catchment boundaries for aggregation.geojson'),
@@ -78,11 +90,26 @@ function displayCatchmentName(raw) {
   return t; // others already correct
 }
 
+// Safe polygon ID getter (handles several variants)
+function getPolyId(props){
+  if (!props) return '';
+  return String(
+    props.GEEID ?? props.__poly_id__ ?? props.geeid ?? props.gee_id ?? props.id ?? ''
+  );
+}
+
+// tolerant timestamp parser
+function parseTs(s){
+  if (!s) return null;
+  const norm = String(s).replace(' ', 'T'); // "YYYY-MM-DD HH:MM:SS" -> "YYYY-MM-DDTHH:MM:SS"
+  const d = new Date(norm);
+  return isNaN(+d) ? null : d;
+}
+
 // colour ramp (5 classes)
 function ramp(val, min, max) {
   if (!isFinite(val)) return '#cccccc';
   const t = (val - min) / (max - min || 1); // 0..1
-  // simple 5-class HSL blue→red
   const bins = [0.1, 0.3, 0.5, 0.7];
   const colors = ['#edf8fb','#b2e2e2','#66c2a4','#2ca25f','#006d2c']; // ColorBrewer-ish
   const idx = t < bins[0] ? 0 : t < bins[1] ? 1 : t < bins[2] ? 2 : t < bins[3] ? 3 : 4;
@@ -107,24 +134,34 @@ document.getElementById('basemap').addEventListener('change', e=>{
   });
 });
 
-// keep maps roughly in sync
-mapWSA.on('move', ()=> mapVOL.setView(mapWSA.getCenter(), mapWSA.getZoom(), {animate:false}));
-mapVOL.on('move', ()=> mapWSA.setView(mapVOL.getCenter(), mapVOL.getZoom(), {animate:false}));
+// keep maps in sync without feedback loops
+let _syncing = false;
+function sync(src, dest){
+  if (_syncing) return;
+  _syncing = true;
+  dest.setView(src.getCenter(), src.getZoom(), {animate:false});
+  _syncing = false;
+}
+mapWSA.on('moveend', ()=> sync(mapWSA, mapVOL));
+mapVOL.on('moveend', ()=> sync(mapVOL, mapWSA));
 
 /* -------------------- Data holders -------------------- */
 let polyLayerWSA, polyLayerVOL, catchLayerWSA, catchLayerVOL;
-const idxByGEEID = new Map();     // GEEID -> array index lookup
 const seriesByPoly = new Map();   // GEEID -> [{t, wsa_m2, vol_ML}]
 const seriesByCatch = new Map();  // displayCatch -> [{t, wsa_m2, vol_ML}]
 let timestamps = [];              // sorted unique Date objects
 let tsIndex = 0;
 
-/* -------------------- Load GeoJSONs -------------------- */
+/* -------------------- Boot: load data -------------------- */
+setStatus('Loading datasets…');
 Promise.all([
-  fetch(DATA.polys).then(r=>r.json()),
-  fetch(DATA.catchments).then(r=>r.json()),
+  fetch(DATA.polys).then(r => { if(!r.ok) throw new Error('Polygons fetch failed: ' + r.status); return r.json(); }),
+  fetch(DATA.catchments).then(r => { if(!r.ok) throw new Error('Catchments fetch failed: ' + r.status); return r.json(); }),
   loadAllCsvs()
 ]).then(([polys, catches])=>{
+  console.log('Loaded polygons features:', polys.features?.length);
+  console.log('Loaded catchments features:', catches.features?.length);
+
   // polygons
   const baseStyle = { color:'#0033cc', weight:1, fillOpacity:0.25 };
   polyLayerWSA = L.geoJSON(polys, {
@@ -140,7 +177,7 @@ Promise.all([
   try {
     const b = polyLayerWSA.getBounds();
     mapWSA.fitBounds(b); mapVOL.fitBounds(b);
-  } catch(e){}
+  } catch(e){ console.warn('fitBounds failed', e); }
 
   // catchments (lighter)
   const cStyle = { color:'#666', weight:2, fillOpacity:0.05 };
@@ -156,6 +193,10 @@ Promise.all([
 
   // initial paint
   paintForTimeIndex(0);
+  setStatus('Ready ✓  Polygons: ' + (polys.features?.length||0) + ' | Catchments: ' + (catches.features?.length||0) + ' | Timestamps: ' + timestamps.length);
+}).catch(err=>{
+  console.error('BOOT ERROR:', err);
+  setStatus('Data load error: ' + err.message + '. See Console (F12).');
 });
 
 /* -------------------- CSV loading & indexing -------------------- */
@@ -169,7 +210,9 @@ function loadAllCsvs(){
         complete: res => {
           all.push(...res.data);
           done++;
+          console.log('Loaded CSV', path, 'rows:', res.data.length);
           if (done === DATA.csvs.length) {
+            console.log('Combined CSV rows:', all.length);
             indexRows(all);
             resolve();
           }
@@ -182,21 +225,22 @@ function loadAllCsvs(){
 
 function indexRows(rows){
   // expected columns: Timestamp,GEEID,Catchment,WSA_m2, Predicted_Volume_ML (plus others)
-  // 1) normalize timestamps
   const tset = new Set();
   rows.forEach(r=>{
-    const t = new Date(r.Timestamp);
-    if (!isNaN(+t)) {
+    const t = parseTs(r.Timestamp);
+    if (t) {
       r._t = t;
       tset.add(t.toISOString());
     }
     r._catchDisp = displayCatchmentName(r.Catchment);
   });
   timestamps = Array.from(tset).sort().map(s=>new Date(s));
+  console.log('Unique timestamps:', timestamps.length);
 
-  // 2) per-poly series
+  // per-poly series
   rows.forEach(r=>{
-    const id = String(r.GEEID);
+    const id = String(r.GEEID ?? r.__poly_id__ ?? r.id ?? '');
+    if (!id) return;
     if (!seriesByPoly.has(id)) seriesByPoly.set(id, []);
     seriesByPoly.get(id).push({
       t: r._t,
@@ -204,14 +248,13 @@ function indexRows(rows){
       vol_ML: Number(r.Predicted_Volume_ML) || 0
     });
   });
-  // sort each series by time
   seriesByPoly.forEach(arr=>arr.sort((a,b)=>a.t-b.t));
 
-  // 3) per-catchment aggregated series (sum by time)
+  // per-catchment aggregated series (sum by time)
   const byCatchByIso = new Map(); // catch -> iso -> {wsa,vol}
   rows.forEach(r=>{
     const c = r._catchDisp; const iso = r._t?.toISOString();
-    if (!iso) return;
+    if (!iso || !c) return;
     if (!byCatchByIso.has(c)) byCatchByIso.set(c, new Map());
     const m = byCatchByIso.get(c);
     const o = m.get(iso) || {wsa:0, vol:0};
@@ -237,11 +280,12 @@ function indexRows(rows){
 
 /* -------------------- Painting by time -------------------- */
 function paintForTimeIndex(i){
+  if (!timestamps.length) return;
   tsIndex = Math.max(0, Math.min(i, timestamps.length-1));
   const t = timestamps[tsIndex];
   document.getElementById('tsLabel').textContent = t ? t.toISOString().slice(0,10) : '';
 
-  // compute value ranges for this date for both metrics
+  // value ranges
   const valsWSA = [], valsVOL = [];
   seriesByPoly.forEach(arr=>{
     const pt = binaryFindByTime(arr, t);
@@ -251,7 +295,7 @@ function paintForTimeIndex(i){
   const vMin = Math.min(...valsVOL, 0), vMax = Math.max(...valsVOL, 1);
 
   function styleFor(f, metric){
-    const id = String(f.properties.GEEID ?? f.properties.__poly_id__ ?? '');
+    const id = getPolyId(f.properties);
     const ser = seriesByPoly.get(id);
     let val = NaN;
     if (ser){
@@ -262,19 +306,19 @@ function paintForTimeIndex(i){
     return { color:'#333', weight:1, fill:true, fillOpacity:0.7, fillColor:color };
   }
 
-  polyLayerWSA.setStyle(f=>styleFor(f,'WSA'));
-  polyLayerVOL.setStyle(f=>styleFor(f,'VOL'));
+  if (polyLayerWSA) polyLayerWSA.setStyle(f=>styleFor(f,'WSA'));
+  if (polyLayerVOL) polyLayerVOL.setStyle(f=>styleFor(f,'VOL'));
 }
 
-// fast lookup for time (assumes arr sorted by t)
+// find exact/nearest previous time
 function binaryFindByTime(arr, t){
   if (!t || !arr || !arr.length) return null;
   const iso = t.toISOString();
-  // exact match preferred; otherwise nearest previous
   let lo=0, hi=arr.length-1, best=null;
   while (lo<=hi){
     const mid=(lo+hi)>>1;
     const mt = arr[mid].t;
+    if (!mt) { hi = mid-1; continue; }
     if (mt.toISOString() === iso) return arr[mid];
     if (mt < t){ best = arr[mid]; lo = mid+1; } else { hi = mid-1; }
   }
@@ -283,7 +327,7 @@ function binaryFindByTime(arr, t){
 
 /* -------------------- Popups & charts -------------------- */
 function bindPolyEvents(feature, layer, metric){
-  const id = String(feature.properties.GEEID ?? feature.properties.__poly_id__ ?? '');
+  const id = getPolyId(feature.properties);
   const name = `GEEID ${id}`;
   layer.on('click', ()=>{
     const ser = seriesByPoly.get(id) || [];
@@ -292,7 +336,6 @@ function bindPolyEvents(feature, layer, metric){
 }
 
 function bindCatchEvents(feature, layer, metric){
-  // assume catchment name is in a property; fall back to 'name'/'Catchment'
   const raw = feature.properties?.name || feature.properties?.Catchment || '';
   const disp = displayCatchmentName(raw);
   layer.on('mouseover', ()=>{
@@ -303,18 +346,20 @@ function bindCatchEvents(feature, layer, metric){
 }
 
 function openChartPopup(layer, title, ser, metric){
-  const labels = ser.map(p=>p.t.toISOString().slice(0,10));
+  const labels = ser.map(p=>p.t?.toISOString().slice(0,10));
   const data = ser.map(p=> metric==='WSA' ? p.wsa_m2 : p.vol_ML);
   const unit = metric==='WSA' ? 'm²' : 'ML';
 
   const div = document.createElement('div');
   div.style.width = '320px';
-  div.innerHTML = `<div style="font:600 13px system-ui;margin-bottom:6px">${title}<br/><span style="font-weight:400">Metric: ${metric} (${unit})</span></div><canvas id="c"></canvas>`;
+  const cid = 'c' + Math.random().toString(36).slice(2);
+  div.innerHTML = `<div style="font:600 13px system-ui;margin-bottom:6px">${title}<br/><span style="font-weight:400">Metric: ${metric} (${unit})</span></div><canvas id="${cid}" style="width:300px;height:160px"></canvas>`;
   layer.bindPopup(div, {maxWidth: 360}).openPopup();
 
-  // defer so canvas is in DOM
   setTimeout(()=>{
-    new Chart(div.querySelector('#c').getContext('2d'), {
+    const ctx = document.getElementById(cid)?.getContext('2d');
+    if (!ctx) return;
+    new Chart(ctx, {
       type:'line',
       data:{ labels, datasets:[{ label: metric, data, pointRadius:0, tension:0.2 }]},
       options:{
