@@ -511,23 +511,25 @@
     toggleCatchChoro.addEventListener('change',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
 
     /* ===== Prefer catchment clicks ===== */
-    function setPreferCatchment(on){
+       function setPreferCatchment(on){
       const catchmentsPane = map.getPane('catchmentsPane');
       const polysPane = map.getPane('polysPane');
-      if (on) {
-        catchmentsPane.style.zIndex = '1003';
-        polysPane.style.zIndex = '1002';
-        polysPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'none');
-        catchmentsPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
-      } else {
-        catchmentsPane.style.zIndex = '401';
-        polysPane.style.zIndex = '402';
-        polysPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
-        catchmentsPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
+      if (!catchmentsPane || !polysPane) return;
 
-      }
+      if (on) {
+       catchmentsPane.style.zIndex = '1003';
+       polysPane.style.zIndex = '1002';
+       polysPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'none');
+       catchmentsPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
+    } else {
+       catchmentsPane.style.zIndex = '401';
+       polysPane.style.zIndex = '402';
+       polysPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
+       catchmentsPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
+     }
     }
-    document.getElementById('preferCatchmentClick').addEventListener('change',()=> setPreferCatchment(preferCatchmentClick.checked));
+
+        document.getElementById('preferCatchmentClick').addEventListener('change',()=> setPreferCatchment(preferCatchmentClick.checked));
 
     /* ===== Processors used by both autoload & manual overrides ===== */
     function processPolygonsGeoJSON(gj){
