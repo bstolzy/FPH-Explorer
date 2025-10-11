@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>FPH Explorer — Public</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin />
+<style>
+  :root{
+    --bg:#0b0f19; --panel:#111827; --muted:#9ca3af; --text:#e5e7eb; --accent:#60a5fa; --border:#1f2937;
+    --poly:#4ea1ff; --sidebar:320px;
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px system-ui,Arial,sans-serif}
+  #wrap{height:100%;display:grid;grid-template-rows:auto 1fr}
+  #topbar{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:rgba(17,24,39,0.6);backdrop-filter:blur(4px);z-index:1001;position:relative}
+  #map{height:calc(100vh - 56px);margin-left:var(--sidebar)}
+  .btn{padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:#0f172a;color:var(--text);cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .filebox{display:inline-flex;align-items:center;gap:6px;padding:6px 8px;border:1px dashed var(--border);border-radius:8px;background:#111827}
+  label{font-weight:600} input[type=file]{color:var(--muted)}
+  .hint{color:var(--muted);font-size:12px}
+
+  /* Left panel */
+  #leftPanel{
+    position:fixed;top:56px;left:0;bottom:0;width:var(--sidebar);background:var(--panel);
+    border-right:1px solid var(--border);z-index:1002;padding:12px;display:grid;grid-auto-rows:min-content;gap:12px
+  }
+  #leftPanel h3{margin:0 0 6px 0;font-size:13px;color:var(--muted);letter-spacing:.02em}
+  .group{padding:10px;border:1px solid var(--border);border-radius:10px;background:#0f172a}
+  .row{display:grid;gap:8px}
+  .row label{display:flex;align-items:center;gap:8px;cursor:pointer}
+  .row input{accent-color:var(--accent)}
+  .small{color:var(--muted);font-size:12px}
+  .sliderRow{display:grid;gap:6px}
+  .sliderRow input[type=range]{width:100%}
+  .inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .inline input[type="month"]{background:#0b0f19;border:1px solid var(--border);border-radius:8px;padding:4px 8px;color:var(--text)}
+  input[type="month"]::-webkit-calendar-picker-indicator{ filter: invert(1) brightness(1.2); opacity: 1; }
+  input[type="month"]::-webkit-datetime-edit, input[type="month"]{ color: var(--text); }
+
+  /* Bottom chart (clears left panel) */
+  #bottomPanel{
+    position:fixed;left:var(--sidebar);right:0;bottom:0;background:var(--panel);
+    border-top:1px solid var(--border);transform:translateY(100%);transition:transform .25s ease;
+    z-index:1003; display:grid;grid-template-rows:auto 1fr;max-height:48vh;box-shadow:0 -14px 40px rgba(0,0,0,.4)
+  }
+  #bottomPanel.open{transform:translateY(0)}
+  #bpTop{display:flex;align-items:center;justify-content:space-between;padding:10px 14px}
+  #bpTitle{font:14px system-ui,Arial}
+  #bpInfo{color:var(--muted);font-size:12px;margin-left:8px}
+  #bpClose{border:none;background:#0f172a;color:var(--text);padding:6px 10px;border-radius:8px;cursor:pointer}
+  #bpBody{padding:10px 14px;overflow:auto;background:#0b1020}
+  #chart{width:100%;height:36vh}
+
+  .leaflet-control{background:#0f172a;color:var(--text);border:1px solid var(--border)}
+  .leaflet-control a{color:var(--text)}
+</style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="topbar">
+      <div class="filebox"><label for="polysFile">Polygons.geojson</label><input type="file" id="polysFile" accept=".geojson,.json"/></div>
+      <div class="filebox"><label for="catchFile">Catchments.geojson</label><input type="file" id="catchFile" accept=".geojson,.json"/></div>
+      <div class="filebox"><label for="csvFile">final_export.csv</label><input type="file" id="csvFile" accept=".csv"/></div>
+      <button id="fitBtn" class="btn" disabled>Fit to layers</button>
+      <span class="hint" id="status">Loading defaults…</span>
+    </div>
+
+    <aside id="leftPanel" aria-label="Controls">
+      <div class="group">
+        <h3>Basemap</h3>
+        <div class="row">
+          <label><input type="radio" name="basemap" value="streets" checked/> Streets (OSM)</label>
+          <label><input type="radio" name="basemap" value="imagery"/> Imagery (Esri World Imagery)</label>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Metric</h3>
+        <div class="row">
+          <label><input type="radio" name="metric" value="wsa" checked/> Water Surface Area (ha)</label>
+          <label><input type="radio" name="metric" value="depth"/> Depth (m)</label>
+          <label><input type="radio" name="metric" value="vol"/> Volume (ML)</label>
+        </div>
+        <div class="small">Catchment charts support WSA & Volume (Depth disabled).</div>
+      </div>
+
+      <div class="group">
+        <h3>Time shading</h3>
+        <div class="row">
+          <label class="inline"><input type="checkbox" id="toggleTime" checked/> Enable time-shaded map & slider</label>
+        </div>
+      </div>
+
+      <div class="group" id="timeControls">
+        <h3>Time</h3>
+        <div class="sliderRow">
+          <div class="small"><span id="frameLabel">Frame: —</span></div>
+          <input type="range" id="timeSlider" min="0" max="0" step="1" value="0"/>
+          <div class="inline">
+            <button id="btnPrev" class="btn">◀</button>
+            <button id="btnPlay" class="btn">Play</button>
+            <button id="btnNext" class="btn">▶</button>
+          </div>
+          <label style="margin-top:6px"><input type="checkbox" id="toggleCatchChoro" checked/> Colour catchments too</label>
+          <div class="small">Monthly frames (linear interpolation). Catchments: WSA & Volume aggregated.</div>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <h3 style="margin-top:6px">Chart time window</h3>
+          <div class="inline">
+            <label>Start <input type="month" id="zoomStart" /></label>
+            <label>End <input type="month" id="zoomEnd" /></label>
+            <button id="btnZoomApply" class="btn">Apply</button>
+            <button id="btnZoomReset" class="btn">Reset</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Selection</h3>
+        <div class="row">
+          <label class="inline">
+            <input type="checkbox" id="preferCatchmentClick"/>
+            Prefer catchment clicks (temporarily make catchments topmost)
+          </label>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Status</h3>
+        <div class="small" id="detail">Waiting for data…</div>
+      </div>
+    </aside>
+
+    <div id="map"></div>
+  </div>
+
+  <!-- Bottom chart panel -->
+  <div id="bottomPanel" aria-hidden="true">
+    <div id="bpTop">
+      <div id="bpTitle"><strong id="bpTitleText">—</strong> <span id="bpInfo"></span></div>
+      <button id="bpClose">Close</button>
+    </div>
+    <div id="bpBody"><canvas id="chart"></canvas></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+  <script>
+    /* ===== Helpers ===== */
+    function safeBlock(el){ try{ if(el){ L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);} }catch{} }
+    function canonicalCatchmentName(s){
+      if(!s) return 'Unknown';
+      let n=String(s).normalize('NFKC').replace(/\s+/g,' ').replace(/[()]/g,'').trim().toLowerCase();
+      n=n.replace(/[\u2010-\u2015]/g,'-').replace(/\s*-\s*/g,'-').replace(/\bcatchment(s)?\b/g,'').replace(/\s{2,}/g,' ').trim();
+      if(n==='cb other'||n==='cb-other') return 'Condamine-Balonne Other';
+      if(n==='condamine-balonne') return 'Condamine-Balonne Lower';
+      if(n.startsWith('condamine')&&n.includes('balonne')) return n.includes('other')?'Condamine-Balonne Other':'Condamine-Balonne Lower';
+      return n.replace(/\b\w/g,c=>c.toUpperCase());
+    }
+    function getCatchmentName(p){
+      const raw = (p?.Catchment ?? p?.Catchments ?? p?.Name ?? '') + '';
+      return canonicalCatchmentName(raw);
+    }
+    function parseNumber(x){ if(x===null||x===undefined||x==='') return NaN; const v=typeof x==='number'?x:parseFloat(String(x).replace(/,/g,'')); return Number.isFinite(v)?v:NaN; }
+    function parseTime(s){
+      if(!s) return new Date(NaN);
+      const str=String(s).trim();
+      const dOnly=/^\d{4}-\d{2}-\d{2}$/.test(str);
+      const d=new Date(dOnly?str+'T00:00:00Z':str);
+      return isNaN(d)?new Date(NaN):d;
+    }
+    function monthStart(d){ return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)); }
+    function addMonths(d,n){ return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth()+n, 1)); }
+    function idFive(idStr){ if(!idStr) return '00000'; const digits=String(idStr).replace(/\D+/g,''); return digits.slice(-5).padStart(5,'0'); }
+
+    /* ===== Map & Panes ===== */
+    const baseLayers={
+      streets:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}),
+      imagery:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Imagery &copy; Esri — Sources: Esri, Maxar, USGS, etc.'})
+    };
+    const map=L.map('map',{layers:[baseLayers.streets]}).setView([-27.5,146],5);
+    document.querySelectorAll('input[name="basemap"]').forEach(r=>{
+      r.addEventListener('change',()=>{ Object.values(baseLayers).forEach(l=>{ if(map.hasLayer(l)) map.removeLayer(l); }); map.addLayer(baseLayers[r.value]); });
+    });
+
+    // Panes
+    map.createPane('catchmentsPane'); const catchmentsPane=map.getPane('catchmentsPane'); catchmentsPane.style.zIndex=401;
+    map.createPane('polysPane'); const polysPane=map.getPane('polysPane'); polysPane.style.zIndex=402;
+
+    // SVG renderers (so we can control pointer events on <path>)
+    const catchSVG = L.svg({ pane: 'catchmentsPane' });
+    const polySVG  = L.svg({ pane: 'polysPane' });
+
+    const groups={ polygons:L.featureGroup({pane:'polysPane'}).addTo(map), catchments:L.featureGroup({pane:'catchmentsPane'}).addTo(map) };
+    L.control.layers(null, { 'Storages':groups.polygons, 'Catchments':groups.catchments }, {collapsed:false,position:'topright'}).addTo(map);
+
+    safeBlock(document.getElementById('leftPanel')); safeBlock(document.getElementById('topbar')); safeBlock(document.getElementById('bottomPanel'));
+
+    /* ===== Styles ===== */
+    const BLUE='#4ea1ff';
+    const STYLE_POLY = {color:'#0b3d91',weight:1,opacity:.9,fillColor:'var(--poly)',fillOpacity:.50};
+    const PALETTE=['#6b7280','#a3a3a3','#94a3b8','#9ca3af','#737373','#64748b','#475569','#374151','#4b5563','#1f2937'];
+    const CATCHMENT_OVERRIDES={
+      'Barwon-Darling':'#e377c2','Border Rivers':'#ff7f0e',
+      'Condamine-Balonne Lower':'#2ca02c','Condamine-Balonne Other':'#17becf',
+      'Gwydir':'#ffd92f','Macquarie':'#1f77b4','Lower Namoi':'#d62728','Upper Namoi':'#a855f7'
+    };
+    function catchmentColor(name){
+      const key=canonicalCatchmentName(name);
+      const override=CATCHMENT_OVERRIDES[key]; if(override) return override;
+      let h=0; for(let i=0;i<key.length;i++) h=(h*31+key.charCodeAt(i))>>>0;
+      return PALETTE[h%PALETTE.length];
+    }
+    const catchmentBaseStyle=(f)=>{ const p=f?.properties||{}; const n=getCatchmentName(p); const c=catchmentColor(n); return {color:c,weight:2,opacity:.9,fillColor:c,fillOpacity:.16}; };
+
+    /* ===== Data stores ===== */
+    const statusEl=document.getElementById('status'), detailEl=document.getElementById('detail');
+    const polygonIdSet=new Set();
+    const seriesByGEEID=new Map(); // id -> {rows:[{t,wsa,depth,vol}], catchment}
+    const polyCatch=new Map();      // id -> catchment (from Polygons.geojson)
+    const catchmentToIDs=new Map(); // catchment -> Set(ids)
+    const catchAgg=new Map();       // cname -> { wsa:[{x,y}], vol:[{x,y}] }
+
+    let frameTicks=[]; const MIN_FRAME_UTC=Date.UTC(2015,10,1);
+    let polyInterp={};  // fi -> { id: {wsa,depth,vol} }
+    let catchInterp={}; // fi -> { cname: {wsa,vol} }
+
+    // UI
+    const metricRadios=document.querySelectorAll('input[name="metric"]');
+    let currentMetric='wsa';
+    metricRadios.forEach(r=>r.addEventListener('change',()=>{ currentMetric=r.value; if(lastSelected) openPanel(lastSelected); if(toggleTime.checked && frameTicks.length) recolorForFrame(+timeSlider.value); }));
+
+    const toggleTime=document.getElementById('toggleTime');
+    const timeControls=document.getElementById('timeControls');
+    const timeSlider=document.getElementById('timeSlider');
+    const frameLabel=document.getElementById('frameLabel');
+    const btnPrev=document.getElementById('btnPrev'), btnNext=document.getElementById('btnNext'), btnPlay=document.getElementById('btnPlay');
+    const toggleCatchChoro=document.getElementById('toggleCatchChoro');
+    const preferCatchmentClick=document.getElementById('preferCatchmentClick');
+
+    const fitBtn=document.getElementById('fitBtn');
+    fitBtn.addEventListener('click',()=>{ const all=L.featureGroup([groups.polygons,groups.catchments]); try{ const b=all.getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{};});
+    function refreshFit(){ const has=groups.polygons.getLayers().length+groups.catchments.getLayers().length>0; fitBtn.disabled=!has; if(has) fitBtn.click(); }
+
+    // Chart
+    const bottomPanel=document.getElementById('bottomPanel'), bpTitleText=document.getElementById('bpTitleText'), bpInfo=document.getElementById('bpInfo');
+    const bpClose=document.getElementById('bpClose'); bpClose.addEventListener('click',()=>{ bottomPanel.classList.remove('open'); bottomPanel.setAttribute('aria-hidden','true'); });
+    const ctx=document.getElementById('chart').getContext('2d'); let chart=null;
+    function drawLine(points,yLabel,title){
+      if(chart) chart.destroy();
+      chart=new Chart(ctx,{
+        type:'line',
+        data:{ datasets:[{
+          data:points, parsing:false,
+          borderColor: BLUE, backgroundColor:'transparent',
+          borderWidth:2, tension:0, spanGaps:false,
+          pointRadius:2, pointBackgroundColor:BLUE, pointBorderWidth:0
+        }]},
+        options:{
+          animation:false, maintainAspectRatio:false, parsing:false,
+          scales:{
+            x:{ type:'time', time:{unit:'month'}, ticks:{color:'#dfe6f5'}, grid:{color:'rgba(255,255,255,0.22)'} },
+            y:{ min:0, ticks:{color:'#dfe6f5'}, grid:{color:'rgba(255,255,255,0.22)'}, title:{display:true,text:yLabel,color:'#e5e7eb'} }
+          },
+          plugins:{ legend:{display:false}, title:{display:true,text:title,color:'#fff',align:'center',font:{weight:'600',size:16}} }
+        }
+      });
+    }
+    let lastSelected=null;
+
+    function metricLabel(m){ return m==='wsa' ? 'WSA' : (m==='depth' ? 'Depth' : 'Volume'); }
+    function yAxisUnits(m){ return m==='wsa' ? 'WSA (ha)' : (m==='depth' ? 'Depth (m)' : 'Volume (ML)'); }
+
+    function openPanel(sel){
+      if(sel.type==='polygon'){
+        const bucket=seriesByGEEID.get(sel.id);
+        const key=(currentMetric==='wsa'?'wsa':currentMetric==='depth'?'depth':'vol');
+        let pts=[]; if(bucket){ pts=bucket.rows.filter(r=>Number.isFinite(r[key])).map(r=>({x:r.t.getTime(), y:r[key]})); }
+        const catchName=bucket?.catchment ? ` (${bucket.catchment})` : '';
+        const idPad=idFive(sel.id);
+        const title=`Storage ID ${idPad}${catchName} ${metricLabel(currentMetric)} Timeseries`;
+        bpTitleText.textContent=title;
+        const t0=pts[0]?.x, t1=pts[pts.length-1]?.x;
+        bpInfo.textContent = pts.length ? ` — ${pts.length} obs${t0&&t1?`, ${new Date(t0).toISOString().slice(0,10)} → ${new Date(t1).toISOString().slice(0,10)}`:''}` : ' — no CSV rows.';
+        drawLine(pts, yAxisUnits(currentMetric), title);
+      } else if(sel.type==='catchment'){
+        // Depth aggregation intentionally unsupported → fall back to WSA, and label/title accordingly
+        let key=currentMetric; if(key==='depth'){ key='wsa'; }
+        const agg=catchAgg.get(sel.cname); const pts=(key==='wsa')? (agg?.wsa||[]) : (agg?.vol||[]);
+        const title=`${sel.cname} Aggregated ${metricLabel(key)} Timeseries`;
+        bpTitleText.textContent=title;
+        const t0=pts[0]?.x, t1=pts[pts.length-1]?.x;
+        bpInfo.textContent = pts.length ? ` — ${pts.length} obs${t0&&t1?`, ${new Date(t0).toISOString().slice(0,10)} → ${new Date(t1).toISOString().slice(0,10)}`:''}` : ' — no CSV rows.';
+        drawLine(pts, yAxisUnits(key), title);
+      }
+      bottomPanel.classList.add('open'); bottomPanel.setAttribute('aria-hidden','false');
+    }
+
+    /* ===== CSV ingest + observed catchment aggregation ===== */
+    function addCatchAgg(cname, tms, wsa, vol){
+      if(!catchAgg.has(cname)) catchAgg.set(cname, {raw:new Map(), wsa:[], vol:[]});
+      const bucket=catchAgg.get(cname);
+      const cur=bucket.raw.get(tms) || {wsa:0, vol:0};
+      if(Number.isFinite(wsa)) cur.wsa += wsa;
+      if(Number.isFinite(vol)) cur.vol += vol;
+      bucket.raw.set(tms, cur);
+    }
+    function finalizeCatchAgg(){
+      for(const [cname,obj] of catchAgg.entries()){
+        const rows=[...obj.raw.entries()].sort((a,b)=>a[0]-b[0]);
+        obj.wsa=rows.filter(([t,v])=>Number.isFinite(v.wsa)).map(([t,v])=>({x:t,y:v.wsa}));
+        obj.vol=rows.filter(([t,v])=>Number.isFinite(v.vol)).map(([t,v])=>({x:t,y:v.vol}));
+      }
+    }
+    function handleCSVRow(row){
+      const idRaw=row['GEEID']; if(!idRaw) return; const id=String(idRaw).trim();
+      const t=parseTime(row['Timestamp']);
+      const wsa=parseNumber(row['WSA (ha)']);
+      const depth=parseNumber(row['Depth (m)']);
+      const vol=parseNumber(row['Volume (ML)']);
+      const catchName=canonicalCatchmentName(row['Catchment'] ?? row['Catchments'] ?? '');
+      const bucket=seriesByGEEID.get(id) || {rows:[], catchment:catchName};
+      bucket.rows.push({t,wsa,depth,vol});
+      if(!bucket.catchment && catchName) bucket.catchment=catchName;
+      seriesByGEEID.set(id, bucket);
+      if(!isNaN(t)){ addCatchAgg(bucket.catchment || catchName, t.getTime(), wsa, vol); }
+    }
+    function ensureCatchmentMappingCompleteness(){
+      const csvNames=new Set(); for(const [,obj] of seriesByGEEID) if(obj?.catchment) csvNames.add(obj.catchment);
+      const polyNames=new Set(catchmentToIDs.keys());
+      const all=new Set([...csvNames, ...polyNames]);
+      for(const cname of all){ if(!catchmentToIDs.has(cname)) catchmentToIDs.set(cname,new Set()); }
+    }
+    function finalizeCSV(){
+      polygonIdSet.clear();
+      for(const [id,obj] of seriesByGEEID.entries()){
+        obj.rows=obj.rows.filter(r=>r.t instanceof Date && !isNaN(r.t)).sort((a,b)=>a.t-b.t);
+        polygonIdSet.add(id);
+      }
+      finalizeCatchAgg();
+      ensureCatchmentMappingCompleteness();
+      buildFramesAndInterpolation();
+      statusEl.textContent=`Loaded ✓ (${polygonIdSet.size.toLocaleString()} polygons)`;
+      detailEl.textContent=`${polygonIdSet.size.toLocaleString()} polygons loaded.`;
+    }
+
+    /* ===== Frames + interpolation ===== */
+    function interpAt(rows, tms){
+      if(!rows||rows.length===0) return null;
+      const n=rows.length, t0=rows[0].t.getTime(), t1=rows[n-1].t.getTime();
+      if(tms<=t0){ const r=rows[0]; return {wsa:r.wsa, depth:r.depth, vol:r.vol}; }
+      if(tms>=t1){ const r=rows[n-1]; return {wsa:r.wsa, depth:r.depth, vol:r.vol}; }
+      let lo=0, hi=n-1;
+      while(hi-lo>1){ const mid=(lo+hi)>>1, tm=rows[mid].t.getTime(); if(tm===tms){ const r=rows[mid]; return {wsa:r.wsa, depth:r.depth, vol:r.vol}; } if(tm<tms) lo=mid; else hi=mid; }
+      const a=rows[lo], b=rows[hi]; const ta=a.t.getTime(), tb=b.t.getTime(), w=(tms-ta)/(tb-ta);
+      const lerp=(x,y)=> (Number.isFinite(x)&&Number.isFinite(y)) ? x + w*(y-x) : (Number.isFinite(x)?x:(Number.isFinite(y)?y:NaN));
+      return { wsa:lerp(a.wsa,b.wsa), depth:lerp(a.depth,b.depth), vol:lerp(a.vol,b.vol) };
+    }
+
+    function rebuildCatchAggFromFrames(){
+      catchAgg.clear();
+      if (!frameTicks.length || !catchInterp[0]) return;
+      const names = Object.keys(catchInterp[0]);
+      for (const cname of names) {
+        const wsaSeries = [];
+        const volSeries = [];
+        for (let fi = 0; fi < frameTicks.length; fi++) {
+          const t = frameTicks[fi].getTime();
+          const rec = catchInterp[fi][cname];
+          if (!rec) continue;
+          if (Number.isFinite(rec.wsa)) wsaSeries.push({ x: t, y: rec.wsa });
+          if (Number.isFinite(rec.vol)) volSeries.push({ x: t, y: rec.vol });
+        }
+        catchAgg.set(cname, { wsa: wsaSeries, vol: volSeries });
+      }
+    }
+
+    function buildFramesAndInterpolation(){
+      let tmin=Infinity, tmax=-Infinity;
+      for(const [,obj] of seriesByGEEID.entries()){
+        if(!obj.rows.length) continue;
+        tmin=Math.min(tmin, obj.rows[0].t.getTime());
+        tmax=Math.max(tmax, obj.rows[obj.rows.length-1].t.getTime());
+      }
+      if(!isFinite(tmin)||!isFinite(tmax)){ frameTicks=[]; return; }
+      tmin=Math.max(tmin, MIN_FRAME_UTC);
+
+      let cur=monthStart(new Date(tmin)), end=monthStart(new Date(tmax));
+      frameTicks=[]; while(cur<=end){ frameTicks.push(new Date(cur)); cur=addMonths(cur,1); }
+      timeSlider.min=0; timeSlider.max=Math.max(0,frameTicks.length-1); timeSlider.value=0;
+      frameLabel.textContent = 'Frame: ' + frameTicks[0].toISOString().slice(0,10);
+
+      const fmt=(d)=>`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
+      document.getElementById('zoomStart').value=fmt(frameTicks[0]);
+      document.getElementById('zoomEnd').value=fmt(frameTicks[frameTicks.length-1]);
+
+      // per-storage interpolation
+      polyInterp={};
+      for(let fi=0; fi<frameTicks.length; fi++){
+        const ft=frameTicks[fi].getTime(); polyInterp[fi]={};
+        for(const [id,obj] of seriesByGEEID.entries()){
+          const v=interpAt(obj.rows, ft);
+          if(v) polyInterp[fi][id]=v;
+        }
+      }
+
+      // per-catchment sums at frames (WSA & Volume)
+      const allCatchments=[...catchmentToIDs.keys()];
+      catchInterp={};
+      for(let fi=0; fi<frameTicks.length; fi++){
+        const dict={};
+        for(const cname of allCatchments){
+          const setIDs=catchmentToIDs.get(cname) || new Set();
+          let wsa=0, vol=0; let hasW=false, hasV=false;
+          for(const id of setIDs){
+            const pv=polyInterp[fi]?.[id]; if(!pv) continue;
+            if(Number.isFinite(pv.wsa)){ wsa+=pv.wsa; hasW=true; }
+            if(Number.isFinite(pv.vol)){ vol+=pv.vol; hasV=true; }
+          }
+          dict[cname]={ wsa: hasW? wsa:NaN, vol: hasV? vol:NaN };
+        }
+        catchInterp[fi]=dict;
+      }
+
+      rebuildCatchAggFromFrames();
+
+      if(toggleTime.checked) recolorForFrame(0); else resetChoropleth();
+    }
+
+    /* ===== Choropleth ===== */
+    const polyRamp=['#eef4ff','#cfe0ff','#a6c3ff','#7aa3ff','#4e84ff','#1f64ff','#0b3d91','#06265a'];
+    const catchRamp=['#e0fbff','#c8efff','#a9ddff','#86c5ff','#5eabff','#348dff','#0f6bff','#0050ff'];
+
+    function quantileBreaks(values,k=7){ const v=values.filter(Number.isFinite).slice().sort((a,b)=>a-b); if(!v.length) return []; const br=[]; for(let i=1;i<k;i++){ const p=i/k, idx=Math.floor(p*(v.length-1)); br.push(v[idx]); } return br; }
+    function colorIndex(val,breaks){ if(!Number.isFinite(val)) return -1; let i=0; while(i<breaks.length && val>breaks[i]) i++; return i; }
+
+    function recolorForFrame(fi){
+      if(!frameTicks.length) return;
+      const ts=frameTicks[fi]; frameLabel.textContent='Frame: '+ts.toISOString().slice(0,10);
+      const yKey=(currentMetric==='wsa'?'wsa':currentMetric==='depth'?'depth':'vol');
+
+      // storages
+      const pvals=[]; for(const [id] of seriesByGEEID.entries()){ const pv=polyInterp[fi][id]; if(pv&&Number.isFinite(pv[yKey])) pvals.push(pv[yKey]); }
+      const pbr=quantileBreaks(pvals,7);
+      groups.polygons.eachLayer(layer=>{
+        layer.eachLayer?.(lyr=>{
+          const p=lyr.feature?.properties||{}; const id=(p.GEEID ?? p.UNIQUEID ?? p.id);
+          const v=polyInterp[fi][String(id).trim()]?.[yKey];
+          const idx=colorIndex(v,pbr);
+          const col=(idx>=0)?polyRamp[Math.min(idx,polyRamp.length-1)]:'#cfe0ff';
+          const op=(idx>=0)?(0.20+0.50*(idx/(polyRamp.length-1))):0.25;
+          lyr.setStyle({fillColor:col,fillOpacity:op,color:'#0a1733',weight:0.8,opacity:0.7});
+        });
+      });
+
+      // catchments (WSA/Volume only)
+      const cKey=(yKey==='depth')?'wsa':yKey;
+      const cvals=[]; for(const [c,obj] of Object.entries(catchInterp[fi]||{})){ const v=obj?.[cKey]; if(Number.isFinite(v)) cvals.push(v); }
+      const cbr=quantileBreaks(cvals,7);
+      groups.catchments.eachLayer(layer=>{
+        layer.eachLayer?.(lyr=>{
+          const cname = lyr._cname || getCatchmentName(lyr.feature?.properties||{});
+          const v=catchInterp[fi]?.[cname]?.[cKey];
+          const idx=colorIndex(v,cbr);
+          const col=(idx>=0)?catchRamp[Math.min(idx,catchRamp.length-1)]:'#e0fbff';
+          const base=catchmentColor(cname);
+          const style=toggleCatchChoro.checked
+            ? {fillColor:col,fillOpacity:0.35,color:base,weight:2,opacity:0.95}
+            : {color:base,weight:2,opacity:.9,fillColor:base,fillOpacity:.12};
+          lyr.setStyle(style);
+        });
+      });
+
+      groups.polygons.bringToFront();
+    }
+    function resetChoropleth(){
+      groups.polygons.eachLayer(l=>l.eachLayer?.(lyr=>lyr.setStyle(STYLE_POLY)));
+      groups.catchments.eachLayer(l=>l.eachLayer?.(lyr=>{
+        const cname = lyr._cname || getCatchmentName(lyr.feature?.properties||{});
+        lyr.setStyle(catchmentBaseStyle({properties:{Catchment:cname}}));
+      }));
+      groups.polygons.bringToFront();
+    }
+
+    /* ===== Slider + play ===== */
+    let playing=false, timer=null;
+    timeSlider.addEventListener('input',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
+    btnPrev.addEventListener('click',()=>{ if(!toggleTime.checked) return; const i=Math.max(0,+timeSlider.value-1); timeSlider.value=i; recolorForFrame(i); });
+    btnNext.addEventListener('click',()=>{ if(!toggleTime.checked) return; const i=Math.min(frameTicks.length-1,+timeSlider.value+1); timeSlider.value=i; recolorForFrame(i); });
+    btnPlay.addEventListener('click',()=>{
+      if(!toggleTime.checked) return;
+      if(playing){ playing=false; clearInterval(timer); btnPlay.textContent='Play'; return; }
+      playing=true; btnPlay.textContent='Pause';
+      timer=setInterval(()=>{ let i=+timeSlider.value+1; if(i>frameTicks.length-1) i=0; timeSlider.value=i; recolorForFrame(i); }, 400);
+    });
+    toggleTime.addEventListener('change',()=>{
+      const on=toggleTime.checked; timeControls.style.display=on?'':'none';
+      if(!on){ if(playing){ playing=false; clearInterval(timer); btnPlay.textContent='Play'; } resetChoropleth(); }
+      else{ recolorForFrame(+timeSlider.value||0); }
+    });
+    toggleCatchChoro.addEventListener('change',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
+
+    /* ===== Prefer catchment clicks ===== */
+    function setPreferCatchment(on){
+      const catchmentsPane = map.getPane('catchmentsPane');
+      const polysPane = map.getPane('polysPane');
+      if (on) {
+        catchmentsPane.style.zIndex = '1003';
+        polysPane.style.zIndex = '1002';
+        polysPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'none');
+        catchmentsPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
+      } else {
+        catchmentsPane.style.zIndex = '401';
+        polysPane.style.zIndex = '402';
+        polysPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
+        catchmentsPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
+      }
+    }
+    document.getElementById('preferCatchmentClick').addEventListener('change',()=> setPreferCatchment(preferCatchmentClick.checked));
+
+    /* ===== Processors that both file inputs and autoload call ===== */
+    function processPolygonsGeoJSON(gj){
+      groups.polygons.clearLayers(); polygonIdSet.clear(); polyCatch.clear();
+      const layer=L.geoJSON(gj,{
+        pane:'polysPane',
+        renderer: polySVG,
+        style:STYLE_POLY,
+        interactive:true,
+        onEachFeature:(feature,lyr)=>{
+          const p=feature.properties||{};
+          const id=String(p.GEEID ?? p.UNIQUEID ?? p.id ?? '').trim();
+          const cname=canonicalCatchmentName(p.Catchment ?? p.Catchments ?? '');
+          if(id){ polyCatch.set(id, cname || 'Unknown'); polygonIdSet.add(id); }
+          if(cname){
+            if(!catchmentToIDs.has(cname)) catchmentToIDs.set(cname,new Set());
+            if(id) catchmentToIDs.get(cname).add(id);
+          }
+          lyr.on('click',()=>{ lastSelected={type:'polygon', id, props:p}; openPanel(lastSelected); });
+        }
+      }).addTo(groups.polygons);
+      try{ const b=groups.polygons.getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{}
+      ensureCatchmentMappingCompleteness();
+      refreshFit();
+      detailEl.textContent=`Loaded ${polygonIdSet.size.toLocaleString()} storages (from Polygons.geojson).`;
+    }
+
+    function processCatchmentsGeoJSON(gj){
+      groups.catchments.clearLayers();
+      const layer=L.geoJSON(gj,{
+        pane:'catchmentsPane',
+        renderer: catchSVG,
+        style:catchmentBaseStyle,
+        interactive:true,
+        bubblingMouseEvents:true,
+        onEachFeature:(feature,lyr)=>{
+          const cname=getCatchmentName(feature.properties||{});
+          lyr._cname = cname;
+          lyr.on('click',()=>{ lastSelected={type:'catchment', cname:lyr._cname}; openPanel(lastSelected); });
+        }
+      }).addTo(groups.catchments);
+      setTimeout(()=>{
+        const paths=map.getPane('catchmentsPane').querySelectorAll('path');
+        paths.forEach(p=>p.style.pointerEvents='auto');
+        if (document.getElementById('preferCatchmentClick').checked) setPreferCatchment(true);
+      },300);
+      try{ const b=groups.catchments.getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{}
+      refreshFit();
+    }
+
+    function processCsvText(text){
+      seriesByGEEID.clear(); catchAgg.clear(); frameTicks=[]; polyInterp={}; catchInterp={};
+      statusEl.textContent='Parsing CSV…'; detailEl.textContent='Parsing rows…';
+      Papa.parse(text,{header:true,dynamicTyping:false,skipEmptyLines:true,
+        worker:true,
+        chunk:(res)=>{ for(const row of res.data) handleCSVRow(row); },
+        complete:()=>{ finalizeCSV(); },
+        error:(err)=>{ alert('CSV parse error: '+err); statusEl.textContent='CSV error.'; }
+      });
+    }
+
+    /* ===== File inputs (manual overrides still work) ===== */
+    document.getElementById('polysFile').addEventListener('change', ev=>{
+      const f=ev.target.files?.[0]; if(!f) return;
+      const reader=new FileReader();
+      reader.onload=()=>{ try{ processPolygonsGeoJSON(JSON.parse(reader.result)); }catch(e){ alert('Failed to parse Polygons.geojson: '+e.message); } };
+      reader.readAsText(f);
+    });
+    document.getElementById('catchFile').addEventListener('change', ev=>{
+      const f=ev.target.files?.[0]; if(!f) return;
+      const reader=new FileReader();
+      reader.onload=()=>{ try{ processCatchmentsGeoJSON(JSON.parse(reader.result)); }catch(e){ alert('Failed to parse Catchments.geojson: '+e.message); } };
+      reader.readAsText(f);
+    });
+    document.getElementById('csvFile').addEventListener('change', ev=>{
+      const f=ev.target.files?.[0]; if(!f) return;
+      const reader=new FileReader();
+      reader.onload=()=>{ processCsvText(reader.result); };
+      reader.readAsText(f);
+    });
+
+    /* ===== Autoload from ./data on page load ===== */
+    const DATA_ROOT = './data/';
+    const DEFAULTS = {
+      polys:      'Polygons.geojson',
+      catchments: 'Catchments.geojson',
+      csv:        'final_export.csv'
+    };
+
+    async function fetchJSON(url){
+      const r=await fetch(url); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json();
+    }
+    async function fetchTEXT(url){
+      const r=await fetch(url); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.text();
+    }
+
+    async function loadDefaults(){
+      statusEl.textContent = 'Loading defaults…';
+      const [gjPolys, gjCatch, csvText] = await Promise.all([
+        fetchJSON(DATA_ROOT + DEFAULTS.polys),
+        fetchJSON(DATA_ROOT + DEFAULTS.catchments),
+        fetchTEXT(DATA_ROOT + DEFAULTS.csv)
+      ]);
+      processPolygonsGeoJSON(gjPolys);
+      processCatchmentsGeoJSON(gjCatch);
+      processCsvText(csvText);
+      statusEl.textContent = 'Loaded defaults ✓';
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const params = new URLSearchParams(location.search);
+      if (params.has('noautoload')) {
+        statusEl.textContent = 'Autoload disabled. Use the file pickers.';
+        return;
+      }
+      loadDefaults().catch(err=>{
+        console.error(err);
+        statusEl.textContent = 'Default load failed — use file pickers.';
+        detailEl.textContent = 'Check /data/ filenames & case.';
+      });
+    });
+  </script>
+</body>
+</html>
