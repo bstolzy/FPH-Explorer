@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>FPH Explorer — Public</title>
+<title>FPH Explorer — GitHub Pages Build</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin />
 <style>
@@ -11,25 +11,19 @@
     --poly:#4ea1ff; --sidebar:320px;
   }
   html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px system-ui,Arial,sans-serif}
-  #wrap{height:100%;display:grid;grid-template-rows:auto 1fr}
-  #topbar{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:rgba(17,24,39,0.6);backdrop-filter:blur(4px);z-index:1001;position:relative}
-  /* Hidden state for topbar after successful autoload */
-  #topbar.hidden{display:none}
-  #map{height:100%} /* fill remaining grid row */
+  #wrap{height:100%;display:grid;grid-template-rows:1fr}
+  /* Map fills full height; left panel carves out margin */
+  #map{height:100vh;margin-left:var(--sidebar)}
   .btn{padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:#0f172a;color:var(--text);cursor:pointer}
   .btn:disabled{opacity:.5;cursor:not-allowed}
-  .filebox{display:inline-flex;align-items:center;gap:6px;padding:6px 8px;border:1px dashed var(--border);border-radius:8px;background:#111827}
-  label{font-weight:600} input[type=file]{color:var(--muted)}
+  label{font-weight:600}
   .hint{color:var(--muted);font-size:12px}
 
   /* Left panel */
   #leftPanel{
-    position:fixed;top:56px;left:0;bottom:0;width:var(--sidebar);background:var(--panel);
+    position:fixed;top:0;left:0;bottom:0;width:var(--sidebar);background:var(--panel);
     border-right:1px solid var(--border);z-index:1002;padding:12px;display:grid;grid-auto-rows:min-content;gap:12px
   }
-  /* When topbar is hidden, lift the left panel up to the top */
-  #leftPanel.topbar-hidden{top:0}
-
   #leftPanel h3{margin:0 0 6px 0;font-size:13px;color:var(--muted);letter-spacing:.02em}
   .group{padding:10px;border:1px solid var(--border);border-radius:10px;background:#0f172a}
   .row{display:grid;gap:8px}
@@ -63,20 +57,13 @@
 </head>
 <body>
   <div id="wrap">
-    <div id="topbar">
-      <div class="filebox"><label for="polysFile">Polygons.geojson</label><input type="file" id="polysFile" accept=".geojson,.json"/></div>
-      <div class="filebox"><label for="catchFile">Catchments.geojson</label><input type="file" id="catchFile" accept=".geojson,.json"/></div>
-      <div class="filebox"><label for="csvFile">final_export.csv</label><input type="file" id="csvFile" accept=".csv"/></div>
-      <button id="fitBtn" class="btn" disabled>Fit to layers</button>
-      <span class="hint" id="status">Loading defaults…</span>
-    </div>
-
     <aside id="leftPanel" aria-label="Controls">
       <div class="group">
         <h3>Basemap</h3>
         <div class="row">
           <label><input type="radio" name="basemap" value="streets" checked/> Streets (OSM)</label>
           <label><input type="radio" name="basemap" value="imagery"/> Imagery (Esri World Imagery)</label>
+          <button id="fitBtn" class="btn" style="margin-top:6px;width:100%">Fit to layers</button>
         </div>
       </div>
 
@@ -133,7 +120,7 @@
 
       <div class="group">
         <h3>Status</h3>
-        <div class="small" id="detail">Waiting for data…</div>
+        <div class="small" id="detail">Fetching data…</div>
       </div>
     </aside>
 
@@ -154,6 +141,14 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
   <script>
+    /* ===== Config: paths to public data (relative to repo root) ===== */
+    const DATA = {
+      polygons: 'data/polygons.geojson',
+      catchments: 'data/catchments.geojson',
+      csv: 'data/final_export.csv'
+    };
+    const CACHE_BUST = '?v=2025-10-11'; // tweak if you update data and the browser caches the old copy
+
     /* ===== Helpers ===== */
     function safeBlock(el){ try{ if(el){ L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);} }catch{} }
     function canonicalCatchmentName(s){
@@ -165,18 +160,9 @@
       if(n.startsWith('condamine')&&n.includes('balonne')) return n.includes('other')?'Condamine-Balonne Other':'Condamine-Balonne Lower';
       return n.replace(/\b\w/g,c=>c.toUpperCase());
     }
-    function getCatchmentName(p){
-      const raw = (p?.Catchment ?? p?.Catchments ?? p?.Name ?? '') + '';
-      return canonicalCatchmentName(raw);
-    }
+    function getCatchmentName(p){ const raw = (p?.Catchment ?? p?.Catchments ?? p?.Name ?? '') + ''; return canonicalCatchmentName(raw); }
     function parseNumber(x){ if(x===null||x===undefined||x==='') return NaN; const v=typeof x==='number'?x:parseFloat(String(x).replace(/,/g,'')); return Number.isFinite(v)?v:NaN; }
-    function parseTime(s){
-      if(!s) return new Date(NaN);
-      const str=String(s).trim();
-      const dOnly=/^\d{4}-\d{2}-\d{2}$/.test(str);
-      const d=new Date(dOnly?str+'T00:00:00Z':str);
-      return isNaN(d)?new Date(NaN):d;
-    }
+    function parseTime(s){ if(!s) return new Date(NaN); const str=String(s).trim(); const dOnly=/^\d{4}-\d{2}-\d{2}$/.test(str); const d=new Date(dOnly?str+'T00:00:00Z':str); return isNaN(d)?new Date(NaN):d; }
     function monthStart(d){ return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)); }
     function addMonths(d,n){ return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth()+n, 1)); }
     function idFive(idStr){ if(!idStr) return '00000'; const digits=String(idStr).replace(/\D+/g,''); return digits.slice(-5).padStart(5,'0'); }
@@ -195,14 +181,14 @@
     map.createPane('catchmentsPane'); const catchmentsPane=map.getPane('catchmentsPane'); catchmentsPane.style.zIndex=401;
     map.createPane('polysPane'); const polysPane=map.getPane('polysPane'); polysPane.style.zIndex=402;
 
-    // SVG renderers (so we can control pointer events on <path>)
+    // SVG renderers
     const catchSVG = L.svg({ pane: 'catchmentsPane' });
     const polySVG  = L.svg({ pane: 'polysPane' });
 
     const groups={ polygons:L.featureGroup({pane:'polysPane'}).addTo(map), catchments:L.featureGroup({pane:'catchmentsPane'}).addTo(map) };
     L.control.layers(null, { 'Storages':groups.polygons, 'Catchments':groups.catchments }, {collapsed:false,position:'topright'}).addTo(map);
 
-    safeBlock(document.getElementById('leftPanel')); safeBlock(document.getElementById('topbar')); safeBlock(document.getElementById('bottomPanel'));
+    safeBlock(document.getElementById('leftPanel')); safeBlock(document.getElementById('bottomPanel'));
 
     /* ===== Styles ===== */
     const BLUE='#4ea1ff';
@@ -222,9 +208,7 @@
     const catchmentBaseStyle=(f)=>{ const p=f?.properties||{}; const n=getCatchmentName(p); const c=catchmentColor(n); return {color:c,weight:2,opacity:.9,fillColor:c,fillOpacity:.16}; };
 
     /* ===== Data stores ===== */
-    const topbarEl=document.getElementById('topbar');
-    const leftPanelEl=document.getElementById('leftPanel');
-    const statusEl=document.getElementById('status'), detailEl=document.getElementById('detail');
+    const detailEl=document.getElementById('detail');
     const polygonIdSet=new Set();
     const seriesByGEEID=new Map(); // id -> {rows:[{t,wsa,depth,vol}], catchment}
     const polyCatch=new Map();      // id -> catchment (from Polygons.geojson)
@@ -250,7 +234,6 @@
 
     const fitBtn=document.getElementById('fitBtn');
     fitBtn.addEventListener('click',()=>{ const all=L.featureGroup([groups.polygons,groups.catchments]); try{ const b=all.getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{};});
-    function refreshFit(){ const has=groups.polygons.getLayers().length+groups.catchments.getLayers().length>0; fitBtn.disabled=!has; if(has) fitBtn.click(); }
 
     // Chart
     const bottomPanel=document.getElementById('bottomPanel'), bpTitleText=document.getElementById('bpTitleText'), bpInfo=document.getElementById('bpInfo');
@@ -350,8 +333,7 @@
       finalizeCatchAgg();
       ensureCatchmentMappingCompleteness();
       buildFramesAndInterpolation();
-      statusEl.textContent=`Loaded ✓ (${polygonIdSet.size.toLocaleString()} polygons)`;
-      detailEl.textContent=`${polygonIdSet.size.toLocaleString()} polygons loaded.`;
+      detailEl.textContent=`Loaded ✓ (${polygonIdSet.size.toLocaleString()} polygons)`;
     }
 
     /* ===== Frames + interpolation ===== */
@@ -435,6 +417,8 @@
       rebuildCatchAggFromFrames();
 
       if(toggleTime.checked) recolorForFrame(0); else resetChoropleth();
+      // Auto-fit once after data load
+      try{ const b=L.featureGroup([groups.polygons,groups.catchments]).getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{}
     }
 
     /* ===== Choropleth ===== */
@@ -472,7 +456,7 @@
           const cname = lyr._cname || getCatchmentName(lyr.feature?.properties||{});
           const v=catchInterp[fi]?.[cname]?.[cKey];
           const idx=colorIndex(v,cbr);
-          const col=(idx>=0)?catchRamp[Math.min(idx,catchRamp.length-1)]:'#e0fbff';
+          const col=(idx>=0)?catchRamp[Math.min(idx,catchRamp.length-1)]:'#e0fbff'; // always visible aqua fallback
           const base=catchmentColor(cname);
           const style=toggleCatchChoro.checked
             ? {fillColor:col,fillOpacity:0.35,color:base,weight:2,opacity:0.95}
@@ -510,158 +494,105 @@
     });
     toggleCatchChoro.addEventListener('change',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
 
-    /* ===== Prefer catchment clicks ===== */
-       function setPreferCatchment(on){
-      const catchmentsPane = map.getPane('catchmentsPane');
-      const polysPane = map.getPane('polysPane');
-      if (!catchmentsPane || !polysPane) return;
-
+    /* ===== Prefer catchment clicks (works with SVG) ===== */
+    function setPreferCatchment(on){
       if (on) {
-       catchmentsPane.style.zIndex = '1003';
-       polysPane.style.zIndex = '1002';
-       polysPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'none');
-       catchmentsPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
-    } else {
-       catchmentsPane.style.zIndex = '401';
-       polysPane.style.zIndex = '402';
-       polysPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
-       catchmentsPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
-     }
+        catchmentsPane.style.zIndex = '1003';
+        polysPane.style.zIndex = '1002';
+        polysPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'none');
+        catchmentsPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
+      } else {
+        catchmentsPane.style.zIndex = '401';
+        polysPane.style.zIndex = '402';
+        polysPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
+        catchmentsPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
+      }
+    }
+    document.getElementById('preferCatchmentClick').addEventListener('change',()=> setPreferCatchment(preferCatchmentClick.checked));
+
+    /* ===== Public data loaders ===== */
+    async function loadJSON(url){
+      const r=await fetch(url+CACHE_BUST); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json();
+    }
+    async function loadText(url){ const r=await fetch(url+CACHE_BUST); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.text(); }
+
+    async function fetchAll(){
+      detailEl.textContent='Fetching data…';
+      const [polys, cats, csvText] = await Promise.all([
+        loadJSON(DATA.polygons),
+        loadJSON(DATA.catchments),
+        loadText(DATA.csv)
+      ]);
+      detailEl.textContent='Parsing CSV…';
+      const parsed = Papa.parse(csvText,{header:true,dynamicTyping:false,skipEmptyLines:true});
+      return {polys, cats, rows: parsed.data};
     }
 
-        document.getElementById('preferCatchmentClick').addEventListener('change',()=> setPreferCatchment(preferCatchmentClick.checked));
-
-    /* ===== Processors used by both autoload & manual overrides ===== */
-    function processPolygonsGeoJSON(gj){
+    function loadPolygons(gj){
       groups.polygons.clearLayers(); polygonIdSet.clear(); polyCatch.clear();
-      const layer=L.geoJSON(gj,{
-        pane:'polysPane',
-        renderer: polySVG,
-        style:STYLE_POLY,
-        interactive:true,
+      L.geoJSON(gj,{
+        pane:'polysPane', renderer: polySVG, style:STYLE_POLY, interactive:true,
         onEachFeature:(feature,lyr)=>{
           const p=feature.properties||{};
           const id=String(p.GEEID ?? p.UNIQUEID ?? p.id ?? '').trim();
           const cname=canonicalCatchmentName(p.Catchment ?? p.Catchments ?? '');
           if(id){ polyCatch.set(id, cname || 'Unknown'); polygonIdSet.add(id); }
-          if(cname){
-            if(!catchmentToIDs.has(cname)) catchmentToIDs.set(cname,new Set());
-            if(id) catchmentToIDs.get(cname).add(id);
-          }
+          if(cname){ if(!catchmentToIDs.has(cname)) catchmentToIDs.set(cname,new Set()); if(id) catchmentToIDs.get(cname).add(id); }
           lyr.on('click',()=>{ lastSelected={type:'polygon', id, props:p}; openPanel(lastSelected); });
         }
       }).addTo(groups.polygons);
-      try{ const b=groups.polygons.getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{}
-      ensureCatchmentMappingCompleteness();
-      refreshFit();
-      detailEl.textContent=`Loaded ${polygonIdSet.size.toLocaleString()} storages (from Polygons.geojson).`;
     }
 
-    function processCatchmentsGeoJSON(gj){
+    function loadCatchments(gj){
       groups.catchments.clearLayers();
-      const layer=L.geoJSON(gj,{
-        pane:'catchmentsPane',
-        renderer: catchSVG,
-        style:catchmentBaseStyle,
-        interactive:true,
-        bubblingMouseEvents:true,
+      L.geoJSON(gj,{
+        pane:'catchmentsPane', renderer: catchSVG, style:catchmentBaseStyle, interactive:true, bubblingMouseEvents:true,
         onEachFeature:(feature,lyr)=>{
           const cname=getCatchmentName(feature.properties||{});
           lyr._cname = cname;
           lyr.on('click',()=>{ lastSelected={type:'catchment', cname:lyr._cname}; openPanel(lastSelected); });
         }
       }).addTo(groups.catchments);
+
       setTimeout(()=>{
-        const paths=map.getPane('catchmentsPane').querySelectorAll('path');
+        const paths=catchmentsPane.querySelectorAll('path');
         paths.forEach(p=>p.style.pointerEvents='auto');
         if (document.getElementById('preferCatchmentClick').checked) setPreferCatchment(true);
+        console.log(`✅ Enabled pointer events for ${paths.length} catchment paths`);
       },300);
-      try{ const b=groups.catchments.getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{}
-      refreshFit();
     }
 
-    function processCsvText(text){
-      seriesByGEEID.clear(); catchAgg.clear(); frameTicks=[]; polyInterp={}; catchInterp={};
-      statusEl.textContent='Parsing CSV…'; detailEl.textContent='Parsing rows…';
-      Papa.parse(text,{header:true,dynamicTyping:false,skipEmptyLines:true,
-        worker:true,
-        chunk:(res)=>{ for(const row of res.data) handleCSVRow(row); },
-        complete:()=>{ finalizeCSV(); },
-        error:(err)=>{ alert('CSV parse error: '+err); statusEl.textContent='CSV error.'; }
-      });
-    }
-
-    /* ===== File inputs (manual overrides still available if menu shown) ===== */
-    document.getElementById('polysFile').addEventListener('change', ev=>{
-      const f=ev.target.files?.[0]; if(!f) return;
-      const reader=new FileReader();
-      reader.onload=()=>{ try{ processPolygonsGeoJSON(JSON.parse(reader.result)); }catch(e){ alert('Failed to parse Polygons.geojson: '+e.message); } };
-      reader.readAsText(f);
-    });
-    document.getElementById('catchFile').addEventListener('change', ev=>{
-      const f=ev.target.files?.[0]; if(!f) return;
-      const reader=new FileReader();
-      reader.onload=()=>{ try{ processCatchmentsGeoJSON(JSON.parse(reader.result)); }catch(e){ alert('Failed to parse Catchments.geojson: '+e.message); } };
-      reader.readAsText(f);
-    });
-    document.getElementById('csvFile').addEventListener('change', ev=>{
-      const f=ev.target.files?.[0]; if(!f) return;
-      const reader=new FileReader();
-      reader.onload=()=>{ processCsvText(reader.result); };
-      reader.readAsText(f);
-    });
-
-    /* ===== Autoload from ./data on page load (no-cache) ===== */
-    const DATA_ROOT = './data/';
-    const DEFAULTS = {
-      polys:      'Polygons.geojson',
-      catchments: 'Catchments.geojson',
-      csv:        'final_export.csv'
-    };
-
-    async function fetchJSON(url){
-      const r=await fetch(url, { cache: 'no-store' });
-      if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      return r.json();
-    }
-    async function fetchTEXT(url){
-      const r=await fetch(url, { cache: 'no-store' });
-      if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      return r.text();
-    }
-
-    async function loadDefaults(){
-      statusEl.textContent = 'Loading defaults…';
-      const [gjPolys, gjCatch, csvText] = await Promise.all([
-        fetchJSON(DATA_ROOT + DEFAULTS.polys),
-        fetchJSON(DATA_ROOT + DEFAULTS.catchments),
-        fetchTEXT(DATA_ROOT + DEFAULTS.csv)
-      ]);
-      processPolygonsGeoJSON(gjPolys);
-      processCatchmentsGeoJSON(gjCatch);
-      processCsvText(csvText);
-      statusEl.textContent = 'Loaded defaults ✓';
-      // Hide the topbar automatically (and lift the left panel)
-      const params = new URLSearchParams(location.search);
-      if (!params.has('showmenu')) {
-        topbarEl.classList.add('hidden');
-        leftPanelEl.classList.add('topbar-hidden');
+    async function bootstrap(){
+      try{
+        const {polys, cats, rows} = await fetchAll();
+        loadPolygons(polys);
+        loadCatchments(cats);
+        // rows → handle rows
+        seriesByGEEID.clear(); catchAgg.clear(); frameTicks=[]; polyInterp={}; catchInterp={};
+        rows.forEach(handleCSVRow);
+        finalizeCSV();
+      }catch(e){
+        console.error(e);
+        detailEl.textContent='Error loading data: '+ e.message + ' — check file names/paths and GitHub Pages case-sensitivity.';
       }
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
-      const params = new URLSearchParams(location.search);
-      if (params.has('noautoload')) {
-        statusEl.textContent = 'Autoload disabled. Use the file pickers.';
-        return; // keep menu visible
+    /* ===== Chart zoom controls ===== */
+    function applyZoomWindow(){
+      if(!chart) return;
+      const z0=document.getElementById('zoomStart').value;
+      const z1=document.getElementById('zoomEnd').value;
+      if(z0 && z1){
+        const d0=new Date(z0+'-01T00:00:00Z').getTime();
+        const d1=new Date(z1+'-01T00:00:00Z'); d1.setUTCMonth(d1.getUTCMonth()+1); const d1ms=d1.getTime()-1;
+        chart.options.scales.x.min=d0; chart.options.scales.x.max=d1ms; chart.update();
       }
-      loadDefaults().catch(err=>{
-        console.error(err);
-        statusEl.textContent = 'Default load failed — use file pickers.';
-        detailEl.textContent = 'Check /data/ filenames & case.';
-        // keep menu visible for manual upload
-      });
-    });
+    }
+    document.getElementById('btnZoomApply').addEventListener('click',applyZoomWindow);
+    document.getElementById('btnZoomReset').addEventListener('click',()=>{ if(!chart) return; chart.options.scales.x.min=undefined; chart.options.scales.x.max=undefined; chart.update(); });
+
+    // Kick off
+    window.addEventListener('load', bootstrap);
   </script>
 </body>
 </html>
