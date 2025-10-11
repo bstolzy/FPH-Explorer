@@ -13,7 +13,9 @@
   html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px system-ui,Arial,sans-serif}
   #wrap{height:100%;display:grid;grid-template-rows:auto 1fr}
   #topbar{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:rgba(17,24,39,0.6);backdrop-filter:blur(4px);z-index:1001;position:relative}
-  #map{height:calc(100vh - 56px);margin-left:var(--sidebar)}
+  /* Hidden state for topbar after successful autoload */
+  #topbar.hidden{display:none}
+  #map{height:100%} /* fill remaining grid row */
   .btn{padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:#0f172a;color:var(--text);cursor:pointer}
   .btn:disabled{opacity:.5;cursor:not-allowed}
   .filebox{display:inline-flex;align-items:center;gap:6px;padding:6px 8px;border:1px dashed var(--border);border-radius:8px;background:#111827}
@@ -25,6 +27,9 @@
     position:fixed;top:56px;left:0;bottom:0;width:var(--sidebar);background:var(--panel);
     border-right:1px solid var(--border);z-index:1002;padding:12px;display:grid;grid-auto-rows:min-content;gap:12px
   }
+  /* When topbar is hidden, lift the left panel up to the top */
+  #leftPanel.topbar-hidden{top:0}
+
   #leftPanel h3{margin:0 0 6px 0;font-size:13px;color:var(--muted);letter-spacing:.02em}
   .group{padding:10px;border:1px solid var(--border);border-radius:10px;background:#0f172a}
   .row{display:grid;gap:8px}
@@ -217,6 +222,8 @@
     const catchmentBaseStyle=(f)=>{ const p=f?.properties||{}; const n=getCatchmentName(p); const c=catchmentColor(n); return {color:c,weight:2,opacity:.9,fillColor:c,fillOpacity:.16}; };
 
     /* ===== Data stores ===== */
+    const topbarEl=document.getElementById('topbar');
+    const leftPanelEl=document.getElementById('leftPanel');
     const statusEl=document.getElementById('status'), detailEl=document.getElementById('detail');
     const polygonIdSet=new Set();
     const seriesByGEEID=new Map(); // id -> {rows:[{t,wsa,depth,vol}], catchment}
@@ -516,12 +523,12 @@
         catchmentsPane.style.zIndex = '401';
         polysPane.style.zIndex = '402';
         polysPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
-        catchmentsPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
+        catchmentsPane.querySelectorAll('path').forEach p => p.style.pointerEvents = 'auto';
       }
     }
     document.getElementById('preferCatchmentClick').addEventListener('change',()=> setPreferCatchment(preferCatchmentClick.checked));
 
-    /* ===== Processors that both file inputs and autoload call ===== */
+    /* ===== Processors used by both autoload & manual overrides ===== */
     function processPolygonsGeoJSON(gj){
       groups.polygons.clearLayers(); polygonIdSet.clear(); polyCatch.clear();
       const layer=L.geoJSON(gj,{
@@ -581,7 +588,7 @@
       });
     }
 
-    /* ===== File inputs (manual overrides still work) ===== */
+    /* ===== File inputs (manual overrides still available if menu shown) ===== */
     document.getElementById('polysFile').addEventListener('change', ev=>{
       const f=ev.target.files?.[0]; if(!f) return;
       const reader=new FileReader();
@@ -601,7 +608,7 @@
       reader.readAsText(f);
     });
 
-    /* ===== Autoload from ./data on page load ===== */
+    /* ===== Autoload from ./data on page load (no-cache) ===== */
     const DATA_ROOT = './data/';
     const DEFAULTS = {
       polys:      'Polygons.geojson',
@@ -610,10 +617,14 @@
     };
 
     async function fetchJSON(url){
-      const r=await fetch(url); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json();
+      const r=await fetch(url, { cache: 'no-store' });
+      if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      return r.json();
     }
     async function fetchTEXT(url){
-      const r=await fetch(url); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.text();
+      const r=await fetch(url, { cache: 'no-store' });
+      if(!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      return r.text();
     }
 
     async function loadDefaults(){
@@ -627,18 +638,25 @@
       processCatchmentsGeoJSON(gjCatch);
       processCsvText(csvText);
       statusEl.textContent = 'Loaded defaults ✓';
+      // Hide the topbar automatically (and lift the left panel)
+      const params = new URLSearchParams(location.search);
+      if (!params.has('showmenu')) {
+        topbarEl.classList.add('hidden');
+        leftPanelEl.classList.add('topbar-hidden');
+      }
     }
 
     window.addEventListener('DOMContentLoaded', () => {
       const params = new URLSearchParams(location.search);
       if (params.has('noautoload')) {
         statusEl.textContent = 'Autoload disabled. Use the file pickers.';
-        return;
+        return; // keep menu visible
       }
       loadDefaults().catch(err=>{
         console.error(err);
         statusEl.textContent = 'Default load failed — use file pickers.';
         detailEl.textContent = 'Check /data/ filenames & case.';
+        // keep menu visible for manual upload
       });
     });
   </script>
