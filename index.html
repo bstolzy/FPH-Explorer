@@ -523,7 +523,8 @@
         catchmentsPane.style.zIndex = '401';
         polysPane.style.zIndex = '402';
         polysPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
-        catchmentsPane.querySelectorAll('path').forEach p => p.style.pointerEvents = 'auto';
+        catchmentsPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
+
       }
     }
     document.getElementById('preferCatchmentClick').addEventListener('change',()=> setPreferCatchment(preferCatchmentClick.checked));
