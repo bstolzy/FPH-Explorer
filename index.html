@@ -53,6 +53,20 @@
 
   .leaflet-control{background:#0f172a;color:var(--text);border:1px solid var(--border)}
   .leaflet-control a{color:var(--text)}
+
+  /* Ensure zoom controls are fully visible at top-left */
+  .leaflet-top.leaflet-left{ left:10px; top:10px; }
+
+  /* Legend styles */
+  .legend{
+    background:#0f172a;border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);
+    box-shadow:0 6px 20px rgba(0,0,0,.35); min-width: 220px;
+  }
+  .legend h4{margin:0 0 6px 0;font-size:13px;color:#e5e7eb}
+  .legend .sub{color:var(--muted);font-size:12px;margin-bottom:6px}
+  .legend .ramp{display:flex;gap:4px;align-items:center;margin:8px 0}
+  .legend .sw{width:20px;height:12px;border-radius:3px;border:1px solid #0b1222}
+  .legend .ticks{display:flex;justify-content:space-between;font-size:12px;color:#d1d5db}
 </style>
 </head>
 <body>
@@ -61,8 +75,8 @@
       <div class="group">
         <h3>Basemap</h3>
         <div class="row">
-          <label><input type="radio" name="basemap" value="streets" checked/> Streets (OSM)</label>
-          <label><input type="radio" name="basemap" value="imagery"/> Imagery (Esri World Imagery)</label>
+          <label><input type="radio" name="basemap" value="streets" checked/> Street Map</label>
+          <label><input type="radio" name="basemap" value="imagery"/> Satellite Imagery</label>
           <button id="fitBtn" class="btn" style="margin-top:6px;width:100%">Fit to layers</button>
         </div>
       </div>
@@ -74,7 +88,7 @@
           <label><input type="radio" name="metric" value="depth"/> Depth (m)</label>
           <label><input type="radio" name="metric" value="vol"/> Volume (ML)</label>
         </div>
-        <div class="small">Catchment charts support WSA & Volume (Depth disabled).</div>
+        <div class="small">Catchment charts & shading support <b>WSA & Volume</b>. (Depth is per-storage only.)</div>
       </div>
 
       <div class="group">
@@ -94,7 +108,7 @@
             <button id="btnPlay" class="btn">Play</button>
             <button id="btnNext" class="btn">▶</button>
           </div>
-          <label style="margin-top:6px"><input type="checkbox" id="toggleCatchChoro" checked/> Colour catchments too</label>
+          <label style="margin-top:6px"><input type="checkbox" id="toggleCatchChoro" checked/> Enable catchment shading</label>
           <div class="small">Monthly frames (linear interpolation). Catchments: WSA & Volume aggregated.</div>
         </div>
         <div class="row" style="margin-top:10px">
@@ -147,7 +161,7 @@
       catchments: 'data/catchments.geojson',
       csv: 'data/final_export.csv'
     };
-    const CACHE_BUST = '?v=2025-10-11'; // tweak if you update data and the browser caches the old copy
+    const CACHE_BUST = '?v=2025-10-11';
 
     /* ===== Helpers ===== */
     function safeBlock(el){ try{ if(el){ L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);} }catch{} }
@@ -166,6 +180,15 @@
     function monthStart(d){ return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)); }
     function addMonths(d,n){ return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth()+n, 1)); }
     function idFive(idStr){ if(!idStr) return '00000'; const digits=String(idStr).replace(/\D+/g,''); return digits.slice(-5).padStart(5,'0'); }
+    function percentile(arr, p){
+      if(!arr || !arr.length) return NaN;
+      const v = arr.slice().sort((a,b)=>a-b);
+      const idx = (v.length-1)*p;
+      const lo = Math.floor(idx), hi = Math.ceil(idx);
+      if(lo===hi) return v[lo];
+      const w = idx - lo;
+      return v[lo]*(1-w) + v[hi]*w;
+    }
 
     /* ===== Map & Panes ===== */
     const baseLayers={
@@ -215,14 +238,18 @@
     const catchmentToIDs=new Map(); // catchment -> Set(ids)
     const catchAgg=new Map();       // cname -> { wsa:[{x,y}], vol:[{x,y}] }
 
+    // Capacities (P95) and percent maps
+    const capsByID = new Map();     // id -> {wsaCap, depthCap, volCap}
+    const capsByCatch = new Map();  // cname -> {wsaCapSum, volCapSum}
+
     let frameTicks=[]; const MIN_FRAME_UTC=Date.UTC(2015,10,1);
-    let polyInterp={};  // fi -> { id: {wsa,depth,vol} }
-    let catchInterp={}; // fi -> { cname: {wsa,vol} }
+    let polyInterp={}, catchInterp={};  // absolute values per frame
+    let polyPct={}, catchPct={};        // percent-fullness per frame
 
     // UI
     const metricRadios=document.querySelectorAll('input[name="metric"]');
     let currentMetric='wsa';
-    metricRadios.forEach(r=>r.addEventListener('change',()=>{ currentMetric=r.value; if(lastSelected) openPanel(lastSelected); if(toggleTime.checked && frameTicks.length) recolorForFrame(+timeSlider.value); }));
+    metricRadios.forEach(r=>r.addEventListener('change',()=>{ currentMetric=r.value; if(lastSelected) openPanel(lastSelected); if(toggleTime.checked && frameTicks.length) recolorForFrame(+timeSlider.value); updateLegend(); }));
 
     const toggleTime=document.getElementById('toggleTime');
     const timeControls=document.getElementById('timeControls');
@@ -236,7 +263,7 @@
     fitBtn.addEventListener('click',()=>{ const all=L.featureGroup([groups.polygons,groups.catchments]); try{ const b=all.getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{};});
 
     // Chart
-    const bottomPanel=document.getElementById('bottomPanel'), bpTitleText=document.getElementById('bpTitleText'), bpInfo=document.getElementById('bpInfo');
+    const bottomPanel=document.getElementById('bottomPanel'), bpTitleText=document.getElementById('bpTitleText'), bpInfo=document.getElementById('bpInfo']);
     const bpClose=document.getElementById('bpClose'); bpClose.addEventListener('click',()=>{ bottomPanel.classList.remove('open'); bottomPanel.setAttribute('aria-hidden','true'); });
     const ctx=document.getElementById('chart').getContext('2d'); let chart=null;
     function drawLine(points,yLabel,title){
@@ -324,6 +351,26 @@
       const all=new Set([...csvNames, ...polyNames]);
       for(const cname of all){ if(!catchmentToIDs.has(cname)) catchmentToIDs.set(cname,new Set()); }
     }
+
+    const EPS = 1e-6, MIN_NONZERO = 3, PCTILE = 0.95;
+    function computeCapacities(){
+      capsByID.clear(); capsByCatch.clear();
+      for(const [id,obj] of seriesByGEEID.entries()){
+        const W = obj.rows.map(r=>r.wsa).filter(v=>Number.isFinite(v) && v>EPS);
+        const D = obj.rows.map(r=>r.depth).filter(v=>Number.isFinite(v) && v>EPS);
+        const V = obj.rows.map(r=>r.vol).filter(v=>Number.isFinite(v) && v>EPS);
+        const wsaCap = (W.length>=MIN_NONZERO) ? percentile(W, PCTILE) : NaN;
+        const depthCap = (D.length>=MIN_NONZERO) ? percentile(D, PCTILE) : NaN;
+        const volCap = (V.length>=MIN_NONZERO) ? percentile(V, PCTILE) : NaN;
+        capsByID.set(id,{wsaCap, depthCap, volCap});
+      }
+      for(const [cname,setIDs] of catchmentToIDs.entries()){
+        let w=0, v=0; let hw=false, hv=false;
+        for(const id of setIDs){ const c=capsByID.get(id); if(!c) continue; if(Number.isFinite(c.wsaCap)){ w+=c.wsaCap; hw=true; } if(Number.isFinite(c.volCap)){ v+=c.volCap; hv=true; } }
+        capsByCatch.set(cname,{ wsaCapSum: hw? w:NaN, volCapSum: hv? v:NaN });
+      }
+    }
+
     function finalizeCSV(){
       polygonIdSet.clear();
       for(const [id,obj] of seriesByGEEID.entries()){
@@ -332,6 +379,7 @@
       }
       finalizeCatchAgg();
       ensureCatchmentMappingCompleteness();
+      computeCapacities();
       buildFramesAndInterpolation();
       detailEl.textContent=`Loaded ✓ (${polygonIdSet.size.toLocaleString()} polygons)`;
     }
@@ -386,7 +434,7 @@
       document.getElementById('zoomStart').value=fmt(frameTicks[0]);
       document.getElementById('zoomEnd').value=fmt(frameTicks[frameTicks.length-1]);
 
-      // per-storage interpolation
+      // per-storage interpolation (absolute)
       polyInterp={};
       for(let fi=0; fi<frameTicks.length; fi++){
         const ft=frameTicks[fi].getTime(); polyInterp[fi]={};
@@ -396,7 +444,7 @@
         }
       }
 
-      // per-catchment sums at frames (WSA & Volume)
+      // per-catchment sums at frames (absolute WSA & Volume)
       const allCatchments=[...catchmentToIDs.keys()];
       catchInterp={};
       for(let fi=0; fi<frameTicks.length; fi++){
@@ -414,52 +462,70 @@
         catchInterp[fi]=dict;
       }
 
+      // === Percent-fullness (polygons & catchments) ===
+      polyPct={};
+      for(let fi=0; fi<frameTicks.length; fi++){
+        polyPct[fi] = {};
+        for(const [id, vals] of Object.entries(polyInterp[fi])){
+          const caps = capsByID.get(id) || {};
+          const wsaP = (Number.isFinite(vals.wsa) && Number.isFinite(caps.wsaCap) && caps.wsaCap>EPS) ? Math.max(0, Math.min(1, vals.wsa / caps.wsaCap)) : NaN;
+          const depthP = (Number.isFinite(vals.depth) && Number.isFinite(caps.depthCap) && caps.depthCap>EPS) ? Math.max(0, Math.min(1, vals.depth / caps.depthCap)) : NaN;
+          const volP = (Number.isFinite(vals.vol) && Number.isFinite(caps.volCap) && caps.volCap>EPS) ? Math.max(0, Math.min(1, vals.vol / caps.volCap)) : NaN;
+          polyPct[fi][id] = { wsaP, depthP, volP };
+        }
+      }
+
+      catchPct={};
+      for(let fi=0; fi<frameTicks.length; fi++){
+        const dict={};
+        for(const cname of allCatchments){
+          const rec = catchInterp[fi]?.[cname] || {};
+          const caps = capsByCatch.get(cname) || {};
+          const wsaP = (Number.isFinite(rec.wsa) && Number.isFinite(caps.wsaCapSum) && caps.wsaCapSum>EPS) ? Math.max(0, Math.min(1, rec.wsa / caps.wsaCapSum)) : NaN;
+          const volP = (Number.isFinite(rec.vol) && Number.isFinite(caps.volCapSum) && caps.volCapSum>EPS) ? Math.max(0, Math.min(1, rec.vol / caps.volCapSum)) : NaN;
+          dict[cname] = { wsaP, volP };
+        }
+        catchPct[fi]=dict;
+      }
+
       rebuildCatchAggFromFrames();
 
       if(toggleTime.checked) recolorForFrame(0); else resetChoropleth();
-      // Auto-fit once after data load
-      try{ const b=L.featureGroup([groups.polygons,groups.catchments]).getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{}
+      updateLegend();
     }
 
-    /* ===== Choropleth ===== */
-    const polyRamp=['#eef4ff','#cfe0ff','#a6c3ff','#7aa3ff','#4e84ff','#1f64ff','#0b3d91','#06265a'];
-    const catchRamp=['#e0fbff','#c8efff','#a9ddff','#86c5ff','#5eabff','#348dff','#0f6bff','#0050ff'];
-
-    function quantileBreaks(values,k=7){ const v=values.filter(Number.isFinite).slice().sort((a,b)=>a-b); if(!v.length) return []; const br=[]; for(let i=1;i<k;i++){ const p=i/k, idx=Math.floor(p*(v.length-1)); br.push(v[idx]); } return br; }
-    function colorIndex(val,breaks){ if(!Number.isFinite(val)) return -1; let i=0; while(i<breaks.length && val>breaks[i]) i++; return i; }
+    /* ===== Choropleth (Percent Fullness) ===== */
+    // Single-hue ramp (light → navy) used for both polygons & catchments
+    const pctRamp=['#e6f0ff','#c7ddff','#a2c4ff','#7da9ff','#5b8fff','#3b73e6','#1d57c9','#003b8f'];
+    function rampColor(p){ if(!Number.isFinite(p)) return '#b8c2cc'; const idx = Math.max(0, Math.min(pctRamp.length-1, Math.round(p*(pctRamp.length-1)))); return pctRamp[idx]; }
+    function polyOpacity(p){ if(!Number.isFinite(p)) return 0.15; return 0.15 + 0.65 * Math.max(0, Math.min(1, p)); }
 
     function recolorForFrame(fi){
       if(!frameTicks.length) return;
       const ts=frameTicks[fi]; frameLabel.textContent='Frame: '+ts.toISOString().slice(0,10);
-      const yKey=(currentMetric==='wsa'?'wsa':currentMetric==='depth'?'depth':'vol');
 
-      // storages
-      const pvals=[]; for(const [id] of seriesByGEEID.entries()){ const pv=polyInterp[fi][id]; if(pv&&Number.isFinite(pv[yKey])) pvals.push(pv[yKey]); }
-      const pbr=quantileBreaks(pvals,7);
+      // Polygons: shade by selected metric percent
+      const mKey = (currentMetric==='wsa'?'wsaP': currentMetric==='depth'?'depthP':'volP');
       groups.polygons.eachLayer(layer=>{
         layer.eachLayer?.(lyr=>{
           const p=lyr.feature?.properties||{}; const id=(p.GEEID ?? p.UNIQUEID ?? p.id);
-          const v=polyInterp[fi][String(id).trim()]?.[yKey];
-          const idx=colorIndex(v,pbr);
-          const col=(idx>=0)?polyRamp[Math.min(idx,polyRamp.length-1)]:'#cfe0ff';
-          const op=(idx>=0)?(0.20+0.50*(idx/(polyRamp.length-1))):0.25;
+          const perc = polyPct[fi]?.[String(id).trim()]?.[mKey];
+          const col = rampColor(perc);
+          const op = polyOpacity(perc);
           lyr.setStyle({fillColor:col,fillOpacity:op,color:'#0a1733',weight:0.8,opacity:0.7});
         });
       });
 
-      // catchments (WSA/Volume only)
-      const cKey=(yKey==='depth')?'wsa':yKey;
-      const cvals=[]; for(const [c,obj] of Object.entries(catchInterp[fi]||{})){ const v=obj?.[cKey]; if(Number.isFinite(v)) cvals.push(v); }
-      const cbr=quantileBreaks(cvals,7);
+      // Catchments: Depth → use WSA percent; else use matching percent
+      const cKey = (currentMetric==='depth') ? 'wsaP' : (currentMetric==='wsa' ? 'wsaP' : 'volP');
       groups.catchments.eachLayer(layer=>{
         layer.eachLayer?.(lyr=>{
           const cname = lyr._cname || getCatchmentName(lyr.feature?.properties||{});
-          const v=catchInterp[fi]?.[cname]?.[cKey];
-          const idx=colorIndex(v,cbr);
-          const col=(idx>=0)?catchRamp[Math.min(idx,catchRamp.length-1)]:'#e0fbff'; // always visible aqua fallback
+          const perc = catchPct[fi]?.[cname]?.[cKey];
+          const col = rampColor(perc);
           const base=catchmentColor(cname);
           const style=toggleCatchChoro.checked
-            ? {fillColor:col,fillOpacity:0.35,color:base,weight:2,opacity:0.95}
+            ? {fillColor:col,fillOpacity:0.75,color:base,weight:2,opacity:0.95}
             : {color:base,weight:2,opacity:.9,fillColor:base,fillOpacity:.12};
           lyr.setStyle(style);
         });
@@ -476,39 +542,49 @@
       groups.polygons.bringToFront();
     }
 
-    /* ===== Slider + play ===== */
-    let playing=false, timer=null;
-    timeSlider.addEventListener('input',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
-    btnPrev.addEventListener('click',()=>{ if(!toggleTime.checked) return; const i=Math.max(0,+timeSlider.value-1); timeSlider.value=i; recolorForFrame(i); });
-    btnNext.addEventListener('click',()=>{ if(!toggleTime.checked) return; const i=Math.min(frameTicks.length-1,+timeSlider.value+1); timeSlider.value=i; recolorForFrame(i); });
-    btnPlay.addEventListener('click',()=>{
-      if(!toggleTime.checked) return;
-      if(playing){ playing=false; clearInterval(timer); btnPlay.textContent='Play'; return; }
-      playing=true; btnPlay.textContent='Pause';
-      timer=setInterval(()=>{ let i=+timeSlider.value+1; if(i>frameTicks.length-1) i=0; timeSlider.value=i; recolorForFrame(i); }, 400);
-    });
-    toggleTime.addEventListener('change',()=>{
-      const on=toggleTime.checked; timeControls.style.display=on?'':'none';
-      if(!on){ if(playing){ playing=false; clearInterval(timer); btnPlay.textContent='Play'; } resetChoropleth(); }
-      else{ recolorForFrame(+timeSlider.value||0); }
-    });
-    toggleCatchChoro.addEventListener('change',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
+    /* ===== Legend (always visible; percent scale) ===== */
+    const legend = L.control({position:'bottomright'});
+    legend.onAdd = function(){
+      const div = L.DomUtil.create('div','legend');
+      div.innerHTML = `
+        <h4 id="leg-title">Shading</h4>
+        <div class="sub" id="leg-sub">—</div>
+        <div class="ramp" id="leg-ramp"></div>
+        <div class="ticks"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+      `;
+      return div;
+    };
+    legend.addTo(map);
 
-    /* ===== Prefer catchment clicks (works with SVG) ===== */
-    function setPreferCatchment(on){
-      if (on) {
-        catchmentsPane.style.zIndex = '1003';
-        polysPane.style.zIndex = '1002';
-        polysPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'none');
-        catchmentsPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
-      } else {
-        catchmentsPane.style.zIndex = '401';
-        polysPane.style.zIndex = '402';
-        polysPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
-        catchmentsPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
-      }
+    function updateLegend(){
+      const titleEl = document.getElementById('leg-title');
+      const subEl = document.getElementById('leg-sub');
+      const rampEl = document.getElementById('leg-ramp');
+      if(!titleEl||!subEl||!rampEl) return;
+      // Title rules: WSA → Storage Inundation (%); Depth/Volume → Storage Fullness (%)
+      const polyTitle = (currentMetric==='wsa') ? 'Storage Inundation (%)' : 'Storage Fullness (%)';
+      titleEl.textContent = polyTitle;
+      // Subtext (same for all metrics)
+      subEl.textContent = 'Polygons & catchments shaded by percent of capacity';
+      // Build ramp swatches
+      rampEl.innerHTML = '';
+      pctRamp.forEach(c=>{ const sw=document.createElement('div'); sw.className='sw'; sw.style.background=c; rampEl.appendChild(sw); });
     }
-    document.getElementById('preferCatchmentClick').addEventListener('change',()=> setPreferCatchment(preferCatchmentClick.checked));
+
+    /* ===== Catchment hover labels (Option B) ===== */
+    function formatPct(p){ return Number.isFinite(p) ? Math.round(p*100) + '%' : '–'; }
+    function attachCatchmentHover(lyr){
+      lyr.on('mouseover', (e)=>{
+        const cname = lyr._cname || getCatchmentName(lyr.feature?.properties||{});
+        const fi = +timeSlider.value || 0;
+        const key = (currentMetric==='depth') ? 'wsaP' : (currentMetric==='wsa' ? 'wsaP' : 'volP');
+        const p = catchPct[fi]?.[cname]?.[key];
+        const labelMetric = (currentMetric==='wsa' || currentMetric==='depth') ? 'Inundation' : 'Volume';
+        const html = `<b>${cname}</b><br>${labelMetric}: ${formatPct(p)}`;
+        lyr.bindTooltip(html,{direction:'top',sticky:true,opacity:1}).openTooltip(e.latlng);
+      });
+      lyr.on('mouseout', ()=>{ try{ lyr.closeTooltip(); }catch{} });
+    }
 
     /* ===== Public data loaders ===== */
     async function loadJSON(url){
@@ -551,6 +627,7 @@
           const cname=getCatchmentName(feature.properties||{});
           lyr._cname = cname;
           lyr.on('click',()=>{ lastSelected={type:'catchment', cname:lyr._cname}; openPanel(lastSelected); });
+          attachCatchmentHover(lyr);
         }
       }).addTo(groups.catchments);
 
@@ -558,7 +635,6 @@
         const paths=catchmentsPane.querySelectorAll('path');
         paths.forEach(p=>p.style.pointerEvents='auto');
         if (document.getElementById('preferCatchmentClick').checked) setPreferCatchment(true);
-        console.log(`✅ Enabled pointer events for ${paths.length} catchment paths`);
       },300);
     }
 
@@ -568,14 +644,50 @@
         loadPolygons(polys);
         loadCatchments(cats);
         // rows → handle rows
-        seriesByGEEID.clear(); catchAgg.clear(); frameTicks=[]; polyInterp={}; catchInterp={};
+        seriesByGEEID.clear(); catchAgg.clear(); frameTicks=[]; polyInterp={}; catchInterp={}; polyPct={}; catchPct={}; capsByID.clear(); capsByCatch.clear();
         rows.forEach(handleCSVRow);
         finalizeCSV();
+        // Auto-fit once after data load
+        try{ const b=L.featureGroup([groups.polygons,groups.catchments]).getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{}
       }catch(e){
         console.error(e);
         detailEl.textContent='Error loading data: '+ e.message + ' — check file names/paths and GitHub Pages case-sensitivity.';
       }
     }
+
+    /* ===== Slider + play ===== */
+    let playing=false, timer=null;
+    timeSlider.addEventListener('input',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
+    btnPrev.addEventListener('click',()=>{ if(!toggleTime.checked) return; const i=Math.max(0,+timeSlider.value-1); timeSlider.value=i; recolorForFrame(i); });
+    btnNext.addEventListener('click',()=>{ if(!toggleTime.checked) return; const i=Math.min(frameTicks.length-1,+timeSlider.value+1); timeSlider.value=i; recolorForFrame(i); });
+    btnPlay.addEventListener('click',()=>{
+      if(!toggleTime.checked) return;
+      if(playing){ playing=false; clearInterval(timer); btnPlay.textContent='Play'; return; }
+      playing=true; btnPlay.textContent='Pause';
+      timer=setInterval(()=>{ let i=+timeSlider.value+1; if(i>frameTicks.length-1) i=0; timeSlider.value=i; recolorForFrame(i); }, 400);
+    });
+    toggleTime.addEventListener('change',()=>{
+      const on=toggleTime.checked; timeControls.style.display=on?'':'none';
+      if(!on){ if(playing){ playing=false; clearInterval(timer); btnPlay.textContent='Play'; } resetChoropleth(); }
+      else{ recolorForFrame(+timeSlider.value||0); }
+    });
+    toggleCatchChoro.addEventListener('change',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
+
+    /* ===== Prefer catchment clicks (works with SVG) ===== */
+    function setPreferCatchment(on){
+      if (on) {
+        catchmentsPane.style.zIndex = '1003';
+        polysPane.style.zIndex = '1002';
+        polysPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'none');
+        catchmentsPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
+      } else {
+        catchmentsPane.style.zIndex = '401';
+        polysPane.style.zIndex = '402';
+        polysPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
+        catchmentsPane.querySelectorAll('path').forEach(p => p.style.pointerEvents = 'auto');
+      }
+    }
+    document.getElementById('preferCatchmentClick').addEventListener('change',()=> setPreferCatchment(preferCatchmentClick.checked));
 
     /* ===== Chart zoom controls ===== */
     function applyZoomWindow(){
