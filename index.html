@@ -263,7 +263,7 @@
     fitBtn.addEventListener('click',()=>{ const all=L.featureGroup([groups.polygons,groups.catchments]); try{ const b=all.getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{};});
 
     // Chart
-    const bottomPanel=document.getElementById('bottomPanel'), bpTitleText=document.getElementById('bpTitleText'), bpInfo=document.getElementById('bpInfo']);
+    const bottomPanel=document.getElementById('bottomPanel'), bpTitleText=document.getElementById('bpTitleText'), bpInfo=document.getElementById('bpInfo');
     const bpClose=document.getElementById('bpClose'); bpClose.addEventListener('click',()=>{ bottomPanel.classList.remove('open'); bottomPanel.setAttribute('aria-hidden','true'); });
     const ctx=document.getElementById('chart').getContext('2d'); let chart=null;
     function drawLine(points,yLabel,title){
