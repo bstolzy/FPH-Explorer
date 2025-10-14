@@ -267,7 +267,11 @@
     fitBtn.addEventListener('click',()=>{ const all=L.featureGroup([groups.polygons,groups.catchments]); try{ const b=all.getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{};});
 
     // Chart
-    const bottomPanel=document.getElementById('bottomPanel'), bpTitleText=document.getElementById('bpTitleText'), bpInfo=document.getElementById('bpInfo');
+    const bottomPanel=document.getElementById('bottomPanel'),
+      bpTop=document.getElementById('bpTop'),
+      bpTitleText=document.getElementById('bpTitleText'),
+      bpInfo=document.getElementById('bpInfo');
+
     const bpClose=document.getElementById('bpClose'); bpClose.addEventListener('click',()=>{ bottomPanel.classList.remove('open'); bottomPanel.setAttribute('aria-hidden','true'); });
     const ctx=document.getElementById('chart').getContext('2d'); let chart=null;
     function drawLine(points, yLabel, title, color){
@@ -297,29 +301,60 @@
     function metricLabel(m){ return m==='wsa' ? 'WSA' : (m==='depth' ? 'Depth' : 'Volume'); }
     function yAxisUnits(m){ return m==='wsa' ? 'WSA (ha)' : (m==='depth' ? 'Depth (m)' : 'Volume (ML)'); }
 
-       function openPanel(sel){
+    
+function openPanel(sel){
   if(sel.type==='polygon'){
-    // ...existing code...
-    drawLine(pts, yAxisUnits(currentMetric), title, /* keep default BLUE */);
-    // optional: remove accent when storage is selected
-    bpTop.style.borderBottom = '1px solid var(--border)';
-  } else if(sel.type==='catchment'){
-    let key=currentMetric; if(key==='depth'){ key='wsa'; }
-    const agg=catchAgg.get(sel.cname); const pts=(key==='wsa')? (agg?.wsa||[]) : (agg?.vol||[]);
-    const title=`${sel.cname} Aggregated ${metricLabel(key)} Timeseries`;
-    bpTitleText.textContent=title;
-    const t0=pts[0]?.x, t1=pts[pts.length-1]?.x;
-    bpInfo.textContent = pts.length ? ` — ${pts.length} obs${t0&&t1?`, ${new Date(t0).toISOString().slice(0,10)} → ${new Date(t1).toISOString().slice(0,10)}`:''}` : ' — no CSV rows.';
+    const bucket = seriesByGEEID.get(sel.id);
+    const key = (currentMetric==='wsa' ? 'wsa' : (currentMetric==='depth' ? 'depth' : 'vol'));
+    let pts = [];
+    if (bucket) {
+      pts = bucket.rows
+        .filter(r => Number.isFinite(r[key]))
+        .map(r => ({ x: r.t.getTime(), y: r[key] }));
+    }
+    const catchName = bucket?.catchment ? ` (${bucket.catchment})` : '';
+    const idPad = idFive(sel.id);
+    const title = `Storage ID ${idPad}${catchName} ${metricLabel(currentMetric)} Timeseries`;
 
-    // NEW: use catchment outline colour for the chart
+    bpTitleText.textContent = title;
+    const t0 = pts[0]?.x, t1 = pts[pts.length-1]?.x;
+    bpInfo.textContent = pts.length
+      ? ` — ${pts.length} obs${t0&&t1?`, ${new Date(t0).toISOString().slice(0,10)} → ${new Date(t1).toISOString().slice(0,10)}`:''}`
+      : ' — no CSV rows.';
+
+    // Storage charts stay BLUE (default in drawLine)
+    drawLine(pts, yAxisUnits(currentMetric), title);
+
+    // optional: neutral accent for storage
+    if (bpTop) bpTop.style.borderBottom = '1px solid var(--border)';
+
+  } else if (sel.type==='catchment'){
+    // Depth aggregation unsupported → fall back to WSA
+    let key = currentMetric;
+    if (key==='depth') key='wsa';
+
+    const agg = catchAgg.get(sel.cname);
+    const pts = (key==='wsa') ? (agg?.wsa || []) : (agg?.vol || []);
+    const title = `${sel.cname} Aggregated ${metricLabel(key)} Timeseries`;
+
+    bpTitleText.textContent = title;
+    const t0 = pts[0]?.x, t1 = pts[pts.length-1]?.x;
+    bpInfo.textContent = pts.length
+      ? ` — ${pts.length} obs${t0&&t1?`, ${new Date(t0).toISOString().slice(0,10)} → ${new Date(t1).toISOString().slice(0,10)}`:''}`
+      : ' — no CSV rows.';
+
+    // Match the catchment outline colour
     const lineColor = catchmentColor(sel.cname);
     drawLine(pts, yAxisUnits(key), title, lineColor);
 
-    // optional: add a subtle matching accent under the header
-    bpTop.style.borderBottom = `2px solid ${lineColor}`;
+    // optional: matching accent under header
+    if (bpTop) bpTop.style.borderBottom = `2px solid ${lineColor}`;
   }
-  bottomPanel.classList.add('open'); bottomPanel.setAttribute('aria-hidden','false');
+
+  bottomPanel.classList.add('open');
+  bottomPanel.setAttribute('aria-hidden','false');
 }
+
 
 
     /* ===== CSV ingest + observed catchment aggregation ===== */
