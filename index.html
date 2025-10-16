@@ -30,7 +30,6 @@
   .row{display:grid;gap:8px}
   .row label{display:flex;align-items:center;gap:8px;cursor:pointer}
   .row input{accent-color:var(--accent)}
-  .small{color:var(--muted);font-size:12px}
   .sliderRow{display:grid;gap:6px}
   .sliderRow input[type=range]{width:100%}
   .inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -67,29 +66,62 @@
   .legend .sw{width:22px;height:14px;border-radius:3px;border:1px solid #0b1222}
   .legend .ticks{display:flex;justify-content:space-between;font-size:12px;color:#d1d5db}
 
-  /* Modal */
+  /* Catchment tooltip style */
+  .catch-tooltip {
+    background: rgba(17,24,39,0.95);
+    color: #f9fafb;
+    font-weight: 600;
+    border-radius: 6px;
+    padding: 4px 8px;
+    border: 1px solid #1f2937;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  }
+
+  /* Modal backdrop */
   .modal-backdrop{
     position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; z-index:3000;
   }
   .modal-backdrop.open{ display:block; }
+
+  /* Modal container */
   .modal{
     position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:3001; padding:20px;
   }
   .modal.open{ display:flex; }
+
+  /* 🔹 Redesigned modal card (dark gradient, animated) */
   .modal-card{
-    background:#fff; color:#111827; border-radius:14px; box-shadow:0 30px 80px rgba(0,0,0,.45);
-    width:min(900px, 92vw); max-height:85vh; overflow:auto; padding:22px 22px 18px 22px;
+    background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+    color:#e2e8f0;
+    border-radius:14px;
+    box-shadow:0 30px 80px rgba(0,0,0,0.5);
+    width:min(900px, 92vw);
+    max-height:85vh;
+    overflow:auto;
+    padding:24px 28px 20px 28px;
+    border:1px solid rgba(255,255,255,0.1);
   }
-  .modal-card h2{ margin:0 0 8px 0; font-size:18px; color:#0b0f19; }
-  .modal-card h3{ margin:14px 0 8px 0; font-size:15px; color:#111827; }
-  .modal-card p{ margin:0 0 10px 0; line-height:1.5; }
-  .modal-card ul{ margin:8px 0 10px 16px; }
-  .modal-card li{ margin:4px 0; }
-  .modal-actions{ display:flex; justify-content:flex-end; margin-top:10px; }
+  .modal.open .modal-card { animation: fadeInUp .4s ease forwards; }
+  @keyframes fadeInUp { from{transform:translateY(40px);opacity:0;} to{transform:translateY(0);opacity:1;} }
+
+  .modal-card h2{
+    margin:0 0 12px 0; font-size:20px;
+    background:linear-gradient(90deg, #60a5fa, #a78bfa);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  }
+  .modal-card h3{
+    margin:16px 0 10px 0; font-size:16px; color:#f8fafc;
+    border-left:3px solid #60a5fa; padding-left:8px;
+  }
+  .modal-card p{ margin:0 0 12px 0; line-height:1.6; }
+  .modal-card ul{ margin:8px 0 12px 18px; }
+  .modal-card li{ margin:6px 0; }
+  .modal-actions{ display:flex; justify-content:flex-end; margin-top:14px; }
   .modal-close{
-    padding:6px 10px; border-radius:8px; border:1px solid #d1d5db; background:#f8fafc; color:#111827; cursor:pointer;
+    padding:6px 10px; border-radius:8px; border:1px solid #334155;
+    background:#1e293b; color:#f1f5f9; cursor:pointer; transition:background .2s ease;
   }
-  .modal-close:hover{ background:#eef2f7; }
+  .modal-close:hover{ background:#334155; }
 
   .leaflet-control.custom-info-control{ margin-bottom:8px; }
 </style>
@@ -113,6 +145,7 @@
           <label><input type="radio" name="metric" value="depth"/> Depth (m)</label>
           <label><input type="radio" name="metric" value="vol"/> Volume (ML)</label>
         </div>
+        <!-- (Removed the explanatory text line as requested) -->
       </div>
 
       <div class="group">
@@ -169,13 +202,14 @@
   <div id="infoModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-hidden="true">
     <div id="modalCard" class="modal-card">
       <h2 id="infoTitle">Information</h2>
+      <p style="margin-top:-6px;font-size:13px;color:#94a3b8;">A satellite-powered look into Australia’s hidden floodplain storages</p>
 
-      <h3><strong>Floodplain Harvesting Introduction</strong></h3>
+      <h3>🌊 <strong>Floodplain Harvesting Introduction</strong></h3>
       <p>The Murray–Darling Basin (MDB) is Australia’s largest river system and the heart of the country’s agricultural production. In the north of the Basin, large floods spill across floodplains where water can be captured in on-farm storages, sometimes tens of hectares in size. This practice, known as <em>floodplain harvesting</em>, helps farmers secure water for irrigation and improve reliability for crops and regional communities. However, capturing this water before it returns to rivers can reduce downstream flows that are vital for towns, wetlands, and floodplain ecosystems.</p>
       <p>Despite decades of discussion, <strong>no one really knows how impactful floodplain harvesting is across the Basin</strong>. Do the benefits for farmers, crop yields, and local economies outweigh the costs to downstream environments and communities? <strong>Until now, this has been impossible to properly assess due to the lack of consistent, measurable data.</strong></p>
       <p>This project uses observations from the <strong>Sentinel-2</strong> and <strong>SWOT</strong> satellites to map water surface areas, estimate depths, and calculate volumes for thousands of individual storages across the MDB. It represents <strong>the first public release of Basin-wide estimates of storage dynamics derived from satellite data</strong>.</p>
 
-      <h3><strong>Online Tool Functionality</strong></h3>
+      <h3>🛰️ <strong>Online Tool Functionality</strong></h3>
       <p>This interactive tool displays floodplain <strong>storage-level</strong> and <strong>catchment-level</strong> data. Each <strong>storage</strong> is shown as its own area on the map, while the larger coloured outlines represent <strong>catchments</strong> that aggregate storage behaviour across regions.</p>
       <ul>
         <li>Use the <strong>time slider</strong> to see how water surface area, depth, and volume change month by month.</li>
@@ -203,7 +237,7 @@
       catchments: 'data/catchments.geojson',
       csv: 'data/final_export.csv'
     };
-    const CACHE_BUST = '?v=2025-10-16b';
+    const CACHE_BUST = '?v=2025-10-16c';
 
     /* ===== Helpers ===== */
     function safeBlock(el){ try{ if(el){ L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);} }catch{} }
@@ -293,9 +327,7 @@
     const catchmentBaseStyle=(f)=>{ const p=f?.properties||{}; const n=getCatchmentName(p); const c=catchmentBaseColor(n); return {color:c,weight:2,opacity:.9,fillColor:c,fillOpacity:.16}; };
 
     // Storage legend ramp: near-white to dark (not navy) blue
-    const baseRamp = [
-      '#F7FAFF','#E6F0FF','#C9DEFF','#A7C8FF','#86B2FF','#5F95FF','#3B78F0','#1C63E3'
-    ];
+    const baseRamp = ['#F7FAFF','#E6F0FF','#C9DEFF','#A7C8FF','#86B2FF','#5F95FF','#3B78F0','#1C63E3'];
     // Catchment ramp: slightly darker to compensate for 0.75 alpha
     function darkenHex(hex, f){
       const h = hex.replace('#','');
@@ -307,7 +339,7 @@
       const to2 = v => v.toString(16).padStart(2,'0');
       return `#${to2(r)}${to2(g)}${to2(b)}`;
     }
-    const catchmentRamp = baseRamp.map(c=>darkenHex(c, 0.14)); // ~14% darker
+    const catchmentRamp = baseRamp.map(c=>darkenHex(c, 0.14));
     const CATCHMENT_ALPHA = 0.75;
 
     /* ===== Data stores ===== */
@@ -361,9 +393,7 @@
           data:points, parsing:false,
           borderColor:c, backgroundColor:'transparent',
           borderWidth:2, tension:0, spanGaps:false,
-          pointRadius:0,            /* line-only */
-          pointHitRadius:6,         /* still hoverable */
-          pointHoverRadius:3
+          pointRadius:0, pointHitRadius:6, pointHoverRadius:3
         }]},
         options:{
           animation:false, maintainAspectRatio:false, parsing:false,
@@ -586,34 +616,13 @@
       updateLegend();
     }
 
-    /* ===== Shading helpers (robust traversal) ===== */
+    /* ===== Shading helpers ===== */
     function rampIndex(p){ 
       if(!Number.isFinite(p)) return -1;
       return Math.max(0, Math.min(baseRamp.length-1, Math.round(p*(baseRamp.length-1))));
     }
     function storageColor(p){ const idx = rampIndex(p); return idx>=0 ? baseRamp[idx] : '#b8c2cc'; }
     function catchmentColorFromPct(p){ const idx = rampIndex(p); return idx>=0 ? catchmentRamp[idx] : '#b8c2cc'; }
-
-    function styleStorageLayer(lyr, fi, mKey){
-      const p=lyr.feature?.properties||{};
-      const idRaw = (p.GEEID ?? p.UNIQUEID ?? p.id ?? '');
-      const id = String(idRaw).trim();
-      if(!id) return;
-      const perc = polyPct[fi]?.[id]?.[mKey];
-      const col = storageColor(perc);
-      lyr.setStyle({fillColor:col,fillOpacity:1.0,color:'#0a1733',weight:0.8,opacity:0.7});
-    }
-
-    function styleCatchmentLayer(lyr, fi, cKey){
-      const cname = lyr._cname || getCatchmentName(lyr.feature?.properties||{});
-      const perc = catchPct[fi]?.[cname]?.[cKey];
-      const col = catchmentColorFromPct(perc);
-      const base = catchmentBaseColor(cname);
-      const style = toggleCatchChoro.checked
-        ? {fillColor:col,fillOpacity:CATCHMENT_ALPHA,color:base,weight:2,opacity:0.95}
-        : {color:base,weight:2,opacity:.9,fillColor:base,fillOpacity:.12};
-      lyr.setStyle(style);
-    }
 
     function traverseAndStyle(group, callback){
       group.eachLayer(l=>{
@@ -627,10 +636,25 @@
       frameLabel.textContent='Frame: '+frameTicks[fi].toISOString().slice(0,10);
 
       const mKey = (currentMetric==='wsa'?'wsaP': currentMetric==='depth'?'depthP':'volP');
-      traverseAndStyle(groups.polygons, (lyr)=> styleStorageLayer(lyr, fi, mKey));
+      traverseAndStyle(groups.polygons, (lyr)=> {
+        const p=lyr.feature?.properties||{};
+        const id=String(p.GEEID ?? p.UNIQUEID ?? p.id ?? '').trim();
+        if(!id) return;
+        const perc = polyPct[fi]?.[id]?.[mKey];
+        lyr.setStyle({fillColor:storageColor(perc),fillOpacity:1.0,color:'#0a1733',weight:0.8,opacity:0.7});
+      });
 
       const cKey = (currentMetric==='depth') ? 'wsaP' : (currentMetric==='wsa' ? 'wsaP' : 'volP');
-      traverseAndStyle(groups.catchments, (lyr)=> styleCatchmentLayer(lyr, fi, cKey));
+      traverseAndStyle(groups.catchments, (lyr)=> {
+        const cname = lyr._cname || getCatchmentName(lyr.feature?.properties||{});
+        const perc = catchPct[fi]?.[cname]?.[cKey];
+        const col = catchmentColorFromPct(perc);
+        const base = catchmentBaseColor(cname);
+        const style = toggleCatchChoro.checked
+          ? {fillColor:col,fillOpacity:CATCHMENT_ALPHA,color:base,weight:2,opacity:0.95}
+          : {color:base,weight:2,opacity:.9,fillColor:base,fillOpacity:.12};
+        lyr.setStyle(style);
+      });
 
       groups.polygons.bringToFront(); // storages always on top
     }
@@ -657,7 +681,6 @@
       return div;
     };
     legend.addTo(map);
-
     function buildLegendRamp(){
       const rampEl = document.getElementById('leg-ramp');
       if(!rampEl) return;
@@ -671,21 +694,9 @@
     }
     function updateLegend(){ buildLegendRamp(); }
 
-    /* ===== Data loading ===== */
+    /* ===== Data loading & layer creation ===== */
     async function loadJSON(url){ const r=await fetch(url+CACHE_BUST); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json(); }
     async function loadText(url){ const r=await fetch(url+CACHE_BUST); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.text(); }
-
-    async function fetchAll(){
-      detailEl.textContent='Fetching data…';
-      const [polys, cats, csvText] = await Promise.all([
-        loadJSON(DATA.polygons),
-        loadJSON(DATA.catchments),
-        loadText(DATA.csv)
-      ]);
-      detailEl.textContent='Parsing CSV…';
-      const parsed = Papa.parse(csvText,{header:true,dynamicTyping:false,skipEmptyLines:true});
-      return {polys, cats, rows: parsed.data};
-    }
 
     function loadPolygons(gj){
       groups.polygons.clearLayers();
@@ -705,32 +716,34 @@
     }
 
     function loadCatchments(gj){
-  groups.catchments.clearLayers();
-  L.geoJSON(gj, {
-    pane:'catchmentsPane',
-    renderer: catchSVG,
-    style: catchmentBaseStyle,
-    interactive:true,
-    bubblingMouseEvents:true,
-    onEachFeature:(feature, lyr)=>{
-      const cname = getCatchmentName(feature.properties || {});
-      lyr._cname = cname;
+      groups.catchments.clearLayers();
+      L.geoJSON(gj,{
+        pane:'catchmentsPane', renderer: catchSVG, style:catchmentBaseStyle, interactive:true, bubblingMouseEvents:true,
+        onEachFeature:(feature,lyr)=>{
+          const cname=getCatchmentName(feature.properties||{});
+          lyr._cname = cname;
 
-      // 🔹 Add a persistent tooltip when hovering
-      lyr.bindTooltip(cname, {
-        sticky: true,
-        direction: 'top',
-        offset: [0, -4],
-        className: 'catch-tooltip'
-      });
+          // 🟦 Restore hover tooltip with name
+          lyr.bindTooltip(cname, {
+            sticky:true, direction:'top', offset:[0,-4], className:'catch-tooltip'
+          });
 
-      lyr.on('click', () => {
-        lastSelected = { type:'catchment', cname: lyr._cname };
-        openPanel(lastSelected);
-      });
+          lyr.on('click',()=>{ lastSelected={type:'catchment', cname:lyr._cname}; openPanel(lastSelected); });
+        }
+      }).addTo(groups.catchments);
     }
-  }).addTo(groups.catchments);
-}
+
+    async function fetchAll(){
+      detailEl.textContent='Fetching data…';
+      const [polys, cats, csvText] = await Promise.all([
+        loadJSON(DATA.polygons),
+        loadJSON(DATA.catchments),
+        loadText(DATA.csv)
+      ]);
+      detailEl.textContent='Parsing CSV…';
+      const parsed = Papa.parse(csvText,{header:true,dynamicTyping:false,skipEmptyLines:true});
+      return {polys, cats, rows: parsed.data};
+    }
 
     function finalizeCSV(){
       // Sort rows and compute caps
@@ -767,7 +780,7 @@
       }
     }
 
-    /* ===== Slider + play ===== */
+    /* ===== Slider + play (no duplicate consts) ===== */
     let playing=false, timer=null;
     timeSlider.addEventListener('input',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
     btnPrev.addEventListener('click',()=>{ if(!toggleTime.checked) return; const i=Math.max(0,+timeSlider.value-1); timeSlider.value=i; recolorForFrame(i); });
