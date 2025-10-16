@@ -21,10 +21,11 @@
   /* Remove the focus rectangle that appears on clicked polygons/catchments */
   .leaflet-interactive:focus { outline: none !important; }
 
-  /* Left panel */
+  /* Left panel (now scrollable) */
   #leftPanel{
     position:fixed;top:0;left:0;bottom:0;width:var(--sidebar);background:var(--panel);
-    border-right:1px solid var(--border);z-index:1002;padding:12px;display:grid;grid-auto-rows:min-content;gap:12px
+    border-right:1px solid var(--border);z-index:1002;padding:12px;display:grid;grid-auto-rows:min-content;gap:12px;
+    overflow-y:auto; overscroll-behavior:contain;
   }
   #leftPanel h3{margin:0 0 6px 0;font-size:13px;color:var(--muted);letter-spacing:.02em}
   .group{padding:10px;border:1px solid var(--border);border-radius:10px;background:#0f172a}
@@ -59,22 +60,49 @@
   /* Ensure zoom controls are fully visible at top-left */
   .leaflet-top.leaflet-left{ left:10px; top:10px; }
 
-  /* Legend styles */
+  /* Legend styles (single legend, aligned chips) */
   .legend{
     background:#0f172a;border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);
     box-shadow:0 6px 20px rgba(0,0,0,.35); min-width: 240px;
   }
   .legend h4{margin:0 0 6px 0;font-size:13px;color:#e5e7eb}
   .legend .sub{color:var(--muted);font-size:12px;margin-bottom:6px}
-  .legend .ramp{display:flex;gap:4px;align-items:center;margin:6px 0 10px 0}
+  /* Chips stretch edge to edge so first aligns to 0% and last aligns to 100% */
+  .legend .ramp{
+    display:flex; justify-content:space-between; align-items:center;
+    gap:0; margin:8px 0; width:100%;
+  }
   .legend .sw{width:22px;height:14px;border-radius:3px;border:1px solid #0b1222}
-  .legend .subtitle{margin-top:4px;font-size:12px;color:#d1d5db;opacity:.95}
-  .legend .ticks{display:flex;justify-content:space-between;font-size:12px;color:#d1d5db;margin-top:6px}
+  .legend .ticks{display:flex;justify-content:space-between;font-size:12px;color:#d1d5db}
+
+  /* Information panel in left menu */
+  #infoPanel { display:none; margin-top:8px; }
+  #infoPanel.open { display:block; }
+  #infoPanel p { margin: 0 0 10px 0; line-height:1.45; }
+  #infoPanel p:last-child { margin-bottom:0; }
 </style>
 </head>
 <body>
   <div id="wrap">
     <aside id="leftPanel" aria-label="Controls">
+      <!-- Information group (collapsible) -->
+      <div class="group" id="infoGroup">
+        <h3>Information</h3>
+        <div class="row">
+          <button id="infoToggle" class="btn" aria-expanded="false">Show details</button>
+          <div id="infoPanel" aria-hidden="true">
+            <h4 style="margin:0 0 8px 0;color:#e5e7eb;font-size:13px;">Floodplain Harvesting Introduction</h4>
+            <p>The Murray–Darling Basin (MDB) is Australia’s largest river system and the heart of the country’s agricultural production. In the north of the Basin, large floods spill across floodplains where water can be captured in on-farm storages, sometimes tens of hectares in size. This practice, known as <em>floodplain harvesting</em>, helps farmers secure water for irrigation and improve reliability for crops and regional communities. However, capturing this water before it returns to rivers can reduce downstream flows that are vital for towns, wetlands, and floodplain ecosystems.</p>
+            <p>Despite decades of discussion, <strong>no one really knows how impactful floodplain harvesting is across the Basin</strong>. Do the benefits for farmers, crop yields, and local economies outweigh the costs to downstream environments and communities? Until now, this has been difficult to assess due to the lack of consistent, measurable data. This project uses satellite observations from <strong>Sentinel-2</strong>, <strong>Landsat</strong>, and <strong>SWOT</strong> to map water surface areas, estimate depths, and calculate volumes for thousands of individual storages across the MDB. It represents <strong>the first public release of Basin-wide estimates of storage dynamics derived from satellite data</strong>.</p>
+
+            <h4 style="margin:12px 0 8px 0;color:#e5e7eb;font-size:13px;">Online Tool Functionality</h4>
+            <p>This interactive tool displays floodplain storage and catchment data derived from satellite observations. Each polygon shows an individual storage, while the larger coloured outlines represent catchments summarising storage behaviour across regions.</p>
+            <p>You can use the time slider to see how water surface area, depth, and volume change month by month; toggle between <strong>WSA</strong>, <strong>Depth</strong>, and <strong>Volume</strong>; and click any storage or catchment to view its time-series chart. Compare shading intensity to understand how full each storage is. Storages are opaque and match the legend exactly; catchments are slightly transparent but appear visually similar.</p>
+            <p>This tool provides the <strong>first Basin-wide, publicly accessible visualisation of floodplain harvesting behaviour.</strong> Look out for the <strong>massive flooding in 2022</strong> and enjoy exploring!</p>
+          </div>
+        </div>
+      </div>
+
       <div class="group">
         <h3>Basemap</h3>
         <div class="row">
@@ -200,7 +228,11 @@
     };
     const map=L.map('map',{layers:[baseLayers.streets]}).setView([-27.5,146],5);
     document.querySelectorAll('input[name="basemap"]').forEach(r=>{
-      r.addEventListener('change',()=>{ Object.values(baseLayers).forEach(l=>{ if(map.hasLayer(l)) map.removeLayer(l); }); map.addLayer(baseLayers[r.value]); updateLegend(); });
+      r.addEventListener('change',()=>{ 
+        Object.values(baseLayers).forEach(l=>{ if(map.hasLayer(l)) map.removeLayer(l); });
+        map.addLayer(baseLayers[r.value]);
+        updateLegend(); 
+      });
     });
 
     // Panes
@@ -218,8 +250,7 @@
 
     /* ===== Styles ===== */
     const BLUE='#4ea1ff';
-    /* slight bump so storages pop over catchments/basemap */
-    const STYLE_POLY = {color:'#0b3d91',weight:1,opacity:.9,fillColor:'var(--poly)',fillOpacity:1.0}; /* default opaque */
+    const STYLE_POLY = {color:'#0b3d91',weight:1,opacity:.9,fillColor:'var(--poly)',fillOpacity:1.0}; /* storages opaque */
     const PALETTE=['#6b7280','#a3a3a3','#94a3b8','#9ca3af','#737373','#64748b','#475569','#374151','#4b5563','#1f2937'];
     const CATCHMENT_OVERRIDES={
       'Barwon-Darling':'#e377c2','Border Rivers':'#ff7f0e',
@@ -232,7 +263,6 @@
       let h=0; for(let i=0;i<key.length;i++) h=(h*31+key.charCodeAt(i))>>>0;
       return PALETTE[h%PALETTE.length];
     }
-    /* base (non-time-shaded) catchments */
     const catchmentBaseStyle=(f)=>{ const p=f?.properties||{}; const n=getCatchmentName(p); const c=catchmentColor(n); return {color:c,weight:2,opacity:.9,fillColor:c,fillOpacity:.16}; };
 
     /* ===== Data stores ===== */
@@ -254,7 +284,12 @@
     // UI
     const metricRadios=document.querySelectorAll('input[name="metric"]');
     let currentMetric='wsa';
-    metricRadios.forEach(r=>r.addEventListener('change',()=>{ currentMetric=r.value; if(lastSelected) openPanel(lastSelected); if(toggleTime.checked && frameTicks.length) recolorForFrame(+timeSlider.value); updateLegend(); }));
+    metricRadios.forEach(r=>r.addEventListener('change',()=>{ 
+      currentMetric=r.value; 
+      if(lastSelected) openPanel(lastSelected); 
+      if(toggleTime.checked && frameTicks.length) recolorForFrame(+timeSlider.value); 
+      updateLegend(); 
+    }));
 
     const toggleTime=document.getElementById('toggleTime');
     const timeControls=document.getElementById('timeControls');
@@ -424,7 +459,7 @@
       if(tms<=t0){ const r=rows[0]; return {wsa:r.wsa, depth:r.depth, vol:r.vol}; }
       if(tms>=t1){ const r=rows[n-1]; return {wsa:r.wsa, depth:r.depth, vol:r.vol}; }
       let lo=0, hi=n-1;
-      while(hi-lo>1){ const mid=(lo+hi)>>1, tm=rows[mid].t.getTime();
+      while(hi-lo>1){ const mid=(lo+hi)>>1, tm=rows[mid].t.getTime(); 
         if(tm===tms){ const r=rows[mid]; return {wsa:r.wsa, depth:r.depth, vol:r.vol}; }
         if(tm<tms) lo=mid; else hi=mid;
       }
@@ -518,7 +553,7 @@
           const rec = catchInterp[fi]?.[cname] || {};
           const caps = capsByCatch.get(cname) || {};
           const wsaP = (Number.isFinite(rec.wsa) && Number.isFinite(caps.wsaCapSum) && caps.wsaCapSum>EPS) ? Math.max(0, Math.min(1, rec.wsa / caps.wsaCapSum)) : NaN;
-          const volP = (Number.isFinite(rec.vol) && Number.isFinite(caps.volCapSum) && caps.volCapSum>EPS) ? Math.max(0, Math.min(1, rec.vol / caps.capsByCatch)) : NaN;
+          const volP = (Number.isFinite(rec.vol) && Number.isFinite(caps.volCapSum) && caps.volCapSum>EPS) ? Math.max(0, Math.min(1, rec.vol / caps.volCapSum)) : NaN;
           dict[cname] = { wsaP, volP };
         }
         catchPct[fi]=dict;
@@ -530,20 +565,19 @@
       updateLegend();
     }
 
-    /* ===== Choropleth ramps ===== */
-    // Base ramp (storages): from near-white to dark (not navy) blue
+    /* ===== Color ramps ===== */
+    // Storage (legend) ramp: near-white to dark (not navy) blue
     const baseRamp = [
-      '#F7FAFF', // ~0% almost white
+      '#F7FAFF',
       '#E6F0FF',
       '#C9DEFF',
       '#A7C8FF',
       '#86B2FF',
       '#5F95FF',
       '#3B78F0',
-      '#1C63E3'  // darkish blue (not navy)
+      '#1C63E3'  // dark-ish blue
     ];
-
-    // Utility: darken a hex color by factor (0.0–1.0)
+    // Slightly darkened ramp for catchments to compensate for transparency
     function darkenHex(hex, f){
       const h = hex.replace('#','');
       const n = h.length === 3 ? h.split('').map(c=>c+c).join('') : h;
@@ -554,13 +588,14 @@
       const to2 = v => v.toString(16).padStart(2,'0');
       return `#${to2(r)}${to2(g)}${to2(b)}`;
     }
+    const catchmentRamp = baseRamp.map(c=>darkenHex(c, 0.14)); // ~14% darker
 
-    // Legend compensation: catchment swatches slightly darker to offset map transparency
-    const storageRamp   = baseRamp;                 // opaque on map and legend
-    const catchmentRamp = baseRamp.map(c=>darkenHex(c, 0.10)); // ~10% darker on legend
-
-    function rampColor(p){ if(!Number.isFinite(p)) return '#b8c2cc'; const idx = Math.max(0, Math.min(baseRamp.length-1, Math.round(p*(baseRamp.length-1)))); return baseRamp[idx]; }
-    function polyOpacity(p){ return 1.0; } // storages always opaque now
+    function rampIndex(p){ 
+      if(!Number.isFinite(p)) return -1;
+      return Math.max(0, Math.min(baseRamp.length-1, Math.round(p*(baseRamp.length-1))));
+    }
+    function storageColor(p){ const idx = rampIndex(p); return idx>=0 ? baseRamp[idx] : '#b8c2cc'; }
+    function catchmentColorFromPct(p){ const idx = rampIndex(p); return idx>=0 ? catchmentRamp[idx] : '#b8c2cc'; }
 
     function recolorForFrame(fi){
       if(!frameTicks.length) return;
@@ -572,21 +607,21 @@
         layer.eachLayer?.(lyr=>{
           const p=lyr.feature?.properties||{}; const id=(p.GEEID ?? p.UNIQUEID ?? p.id);
           const perc = polyPct[fi]?.[String(id).trim()]?.[mKey];
-          const col = rampColor(perc);
+          const col = storageColor(perc);
           lyr.setStyle({fillColor:col,fillOpacity:1.0,color:'#0a1733',weight:0.8,opacity:0.7});
         });
       });
 
-      // Catchments: keep some transparency; use same ramp color
+      // Catchments: keep transparency 0.75 with compensated colors
       const cKey = (currentMetric==='depth') ? 'wsaP' : (currentMetric==='wsa' ? 'wsaP' : 'volP');
       groups.catchments.eachLayer(layer=>{
         layer.eachLayer?.(lyr=>{
           const cname = lyr._cname || getCatchmentName(lyr.feature?.properties||{});
           const perc = catchPct[fi]?.[cname]?.[cKey];
-          const col = rampColor(perc);
+          const col = catchmentColorFromPct(perc);
           const base=catchmentColor(cname);
           const style=toggleCatchChoro.checked
-            ? {fillColor:col,fillOpacity:0.65,color:base,weight:2,opacity:0.95} // ~little transparency
+            ? {fillColor:col,fillOpacity:0.75,color:base,weight:2,opacity:0.95}
             : {color:base,weight:2,opacity:.9,fillColor:base,fillOpacity:.12};
           lyr.setStyle(style);
         });
@@ -603,43 +638,32 @@
       groups.polygons.bringToFront();
     }
 
-    /* ===== Legend (two rows: Storages & Catchments) ===== */
+    /* ===== Legend (single; storages only; chips align to ticks) ===== */
     const legend = L.control({position:'bottomright'});
     legend.onAdd = function(){
       const div = L.DomUtil.create('div','legend');
       div.innerHTML = `
-        <h4 id="leg-title">Shading (Percent of Capacity)</h4>
-        <div class="sub">Storages are opaque; catchments are slightly transparent on map</div>
-
-        <div class="subtitle">Storages</div>
-        <div class="ramp" id="leg-ramp-storage"></div>
-
-        <div class="subtitle">Catchments (legend compensated darker)</div>
-        <div class="ramp" id="leg-ramp-catch"></div>
-
+        <h4 id="leg-title">Shading</h4>
+        <div class="sub" id="leg-sub">Polygons & catchments shaded by percent of capacity</div>
+        <div class="ramp" id="leg-ramp"></div>
         <div class="ticks"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
       `;
       return div;
     };
     legend.addTo(map);
 
-    function buildRamp(el, colors){
-      el.innerHTML = '';
-      colors.forEach(c=>{
+    function buildLegendRamp(){
+      const rampEl = document.getElementById('leg-ramp');
+      if(!rampEl) return;
+      rampEl.innerHTML = '';
+      baseRamp.forEach(c=>{
         const sw=document.createElement('div');
         sw.className='sw';
         sw.style.background=c;
-        el.appendChild(sw);
+        rampEl.appendChild(sw);
       });
     }
-
-    function updateLegend(){
-      const stor = document.getElementById('leg-ramp-storage');
-      const cat  = document.getElementById('leg-ramp-catch');
-      if(!stor || !cat) return;
-      buildRamp(stor, storageRamp);
-      buildRamp(cat,  catchmentRamp);
-    }
+    function updateLegend(){ buildLegendRamp(); }
 
     /* ===== Catchment hover labels ===== */
     function formatPct(p){ return Number.isFinite(p) ? Math.round(p*100) + '%' : '–'; }
@@ -771,6 +795,18 @@
     }
     document.getElementById('btnZoomApply').addEventListener('click',applyZoomWindow);
     document.getElementById('btnZoomReset').addEventListener('click',()=>{ if(!chart) return; chart.options.scales.x.min=undefined; chart.options.scales.x.max=undefined; chart.update(); });
+
+    /* ===== Info toggle wiring ===== */
+    const infoToggle = document.getElementById('infoToggle');
+    const infoPanel  = document.getElementById('infoPanel');
+    if(infoToggle && infoPanel){
+      infoToggle.addEventListener('click', ()=>{
+        const open = infoPanel.classList.toggle('open');
+        infoToggle.setAttribute('aria-expanded', String(open));
+        infoPanel.setAttribute('aria-hidden', String(!open));
+        infoToggle.textContent = open ? 'Hide details' : 'Show details';
+      });
+    }
 
     // Kick off
     window.addEventListener('load', bootstrap);
