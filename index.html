@@ -77,14 +77,14 @@
 
   /* ===== Modal (Info) ===== */
   .modal-backdrop{
-    position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; z-index:2000;
+    position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; z-index:3000;
   }
   .modal-backdrop.open{ display:block; }
   .modal{
-    position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:2001; pointer-events:none;
+    position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:3001;
     padding:20px;
   }
-  .modal.open{ pointer-events:auto; }
+  .modal.open{ display:flex; }
   .modal-card{
     background:#fff; color:#111827; border-radius:14px; box-shadow:0 30px 80px rgba(0,0,0,.45);
     width:min(900px, 92vw); max-height:85vh; overflow:auto; padding:22px 22px 18px 22px;
@@ -157,7 +157,7 @@
         </div>
       </div>
 
-      <!-- Removed Selection group per request -->
+      <!-- Selection group removed; storages always on top -->
 
       <div class="group">
         <h3>Status</h3>
@@ -180,26 +180,26 @@
   <!-- Info Modal -->
   <div id="modalBackdrop" class="modal-backdrop" aria-hidden="true"></div>
   <div id="infoModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-hidden="true">
-    <div class="modal-card">
+    <div id="modalCard" class="modal-card">
       <h2 id="infoTitle">Information</h2>
 
       <h3><strong>Floodplain Harvesting Introduction</strong></h3>
       <p>The Murray–Darling Basin (MDB) is Australia’s largest river system and the heart of the country’s agricultural production. In the north of the Basin, large floods spill across floodplains where water can be captured in on-farm storages, sometimes tens of hectares in size. This practice, known as <em>floodplain harvesting</em>, helps farmers secure water for irrigation and improve reliability for crops and regional communities. However, capturing this water before it returns to rivers can reduce downstream flows that are vital for towns, wetlands, and floodplain ecosystems.</p>
-      <p>Despite decades of discussion, <strong>no one really knows how impactful floodplain harvesting is across the Basin</strong>. Do the benefits for farmers, crop yields, and local economies outweigh the costs to downstream environments and communities? Until now, this has been difficult to assess due to the lack of consistent, measurable data.</p>
-      <p>This project uses satellite observations from <strong>Sentinel-2</strong>, <strong>Landsat</strong>, and <strong>SWOT</strong> to map water surface areas, estimate depths, and calculate volumes for thousands of individual storages across the MDB. It represents <strong>the first public release of Basin-wide estimates of storage dynamics derived from satellite data</strong>.</p>
+      <p>Despite decades of discussion, <strong>no one really knows how impactful floodplain harvesting is across the Basin</strong>. Do the benefits for farmers, crop yields, and local economies outweigh the costs to downstream environments and communities? <strong>Until now, this has been impossible to properly assess due to the lack of consistent, measurable data.</strong></p>
+      <p>This project uses observations from the <strong>Sentinel-2</strong> and <strong>SWOT</strong> satellites to map water surface areas, estimate depths, and calculate volumes for thousands of individual storages across the MDB. It represents <strong>the first public release of Basin-wide estimates of storage dynamics derived from satellite data</strong>.</p>
 
       <h3><strong>Online Tool Functionality</strong></h3>
-      <p>This interactive tool displays floodplain storage and catchment data derived from satellite observations. Each polygon shows an individual storage, while the larger coloured outlines represent catchments summarising storage behaviour across regions.</p>
+      <p>This interactive tool displays floodplain <strong>storage-level</strong> and <strong>catchment-level</strong> data. Each <strong>storage</strong> is shown as its own area on the map, while the larger coloured outlines represent <strong>catchments</strong> that aggregate storage behaviour across regions.</p>
       <ul>
         <li>Use the <strong>time slider</strong> to see how water surface area, depth, and volume change month by month.</li>
         <li>Toggle between <strong>WSA</strong>, <strong>Depth</strong>, and <strong>Volume</strong> to explore different metrics.</li>
-        <li>Click on any <strong>storage</strong> or <strong>catchment</strong> to view its time-series chart.</li>
+        <li>Click any <strong>storage</strong> or <strong>catchment</strong> to view its time-series chart.</li>
         <li>Compare shading intensity to understand how full each storage is. Storages are opaque and match the legend exactly; catchments are slightly transparent but appear visually similar.</li>
       </ul>
       <p>This tool provides the <strong>first Basin-wide, publicly accessible visualisation of floodplain harvesting behaviour.</strong> Look out for the <strong>massive flooding in 2022</strong> and enjoy exploring!</p>
 
       <div class="modal-actions">
-        <button id="modalClose" class="modal-close">Close</button>
+        <button id="modalClose" class="modal-close" type="button">Close</button>
       </div>
     </div>
   </div>
@@ -215,7 +215,7 @@
       catchments: 'data/catchments.geojson',
       csv: 'data/final_export.csv'
     };
-    const CACHE_BUST = '?v=2025-10-11';
+    const CACHE_BUST = '?v=2025-10-16';
 
     /* ===== Helpers ===== */
     function safeBlock(el){ try{ if(el){ L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);} }catch{} }
@@ -251,7 +251,7 @@
     };
     const map=L.map('map',{layers:[baseLayers.streets]}).setView([-27.5,146],5);
 
-    // Create Info button control (top-right), then layer control (sits below)
+    /* -- Info button (top-right) above layer control -- */
     const InfoControl = L.Control.extend({
       options:{ position:'topright' },
       onAdd:function(){
@@ -261,17 +261,15 @@
         c.style.border = '1px solid var(--border)';
         c.style.background = '#0f172a';
         c.innerHTML = '<button id="openInfoBtn" class="btn" style="width:100%;background:#0b1020">Info</button>';
-        // prevent map interactions when using the button
         L.DomEvent.disableClickPropagation(c); L.DomEvent.disableScrollPropagation(c);
         return c;
       }
     });
-    const infoCtl = new InfoControl().addTo(map);
+    new InfoControl().addTo(map);
 
-    // Layers control (below Info)
-    const baseLayersMap = {}; // we switch via radios; keep overlay control only
+    /* -- Overlay groups & layer control (sits below Info) -- */
     const groups={ polygons:L.featureGroup({pane:'polysPane'}).addTo(map), catchments:L.featureGroup({pane:'catchmentsPane'}).addTo(map) };
-    const layerCtl = L.control.layers(null, { 'Storages':groups.polygons, 'Catchments':groups.catchments }, {collapsed:false,position:'topright'}).addTo(map);
+    L.control.layers(null, { 'Storages':groups.polygons, 'Catchments':groups.catchments }, {collapsed:false,position:'topright'}).addTo(map);
 
     // Basemap radios
     document.querySelectorAll('input[name="basemap"]').forEach(r=>{
@@ -292,7 +290,7 @@
 
     safeBlock(document.getElementById('leftPanel')); safeBlock(document.getElementById('bottomPanel'));
 
-    /* ===== Styles ===== */
+    /* ===== Styles & colors ===== */
     const BLUE='#4ea1ff';
     const STYLE_POLY = {color:'#0b3d91',weight:1,opacity:.9,fillColor:'var(--poly)',fillOpacity:1.0}; /* storages opaque */
     const PALETTE=['#6b7280','#a3a3a3','#94a3b8','#9ca3af','#737373','#64748b','#475569','#374151','#4b5563','#1f2937'];
@@ -572,7 +570,7 @@
             if(Number.isFinite(pv.wsa)){ wsa+=pv.wsa; hasW=true; }
             if(Number.isFinite(pv.vol)){ vol+=pv.vol; hasV=true; }
           }
-          dict[cname]={ wsa: hasW? wsa:NaN, vol: hasV? vol:NaN };
+          dict[cname]={ wsa: hasW? wsa:NaN, vol: hasV? v:NaN };
         }
         catchInterp[fi]=dict;
       }
@@ -709,10 +707,8 @@
     }
     function updateLegend(){ buildLegendRamp(); }
 
-    /* ===== Public data loaders ===== */
-    async function loadJSON(url){
-      const r=await fetch(url+CACHE_BUST); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json();
-    }
+    /* ===== Loaders ===== */
+    async function loadJSON(url){ const r=await fetch(url+CACHE_BUST); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json(); }
     async function loadText(url){ const r=await fetch(url+CACHE_BUST); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.text(); }
 
     async function fetchAll(){
@@ -756,18 +752,13 @@
 
     async function bootstrap(){
       try{
-        const [polysLayer, catsLayer, parsed] = await Promise.all([fetch(DATA.polygons + CACHE_BUST), fetch(DATA.catchments + CACHE_BUST), fetch(DATA.csv + CACHE_BUST)]);
-        const polys = await polysLayer.json();
-        const cats = await catsLayer.json();
-        const csvText = await parsed.text();
-        const parsedCSV = Papa.parse(csvText,{header:true,dynamicTyping:false,skipEmptyLines:true});
-
+        const {polys, cats, rows} = await fetchAll();
         loadPolygons(polys);
         loadCatchments(cats);
 
         // rows → handle rows
         seriesByGEEID.clear(); catchAgg.clear(); frameTicks=[]; polyInterp={}; catchInterp={}; polyPct={}; catchPct={}; capsByID.clear(); capsByCatch.clear();
-        parsedCSV.data.forEach(handleCSVRow);
+        rows.forEach(handleCSVRow);
         finalizeCSV();
 
         try{ const b=L.featureGroup([groups.polygons,groups.catchments]).getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{}
@@ -795,26 +786,44 @@
     });
     toggleCatchChoro.addEventListener('change',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
 
-    /* ===== Info Modal wiring ===== */
+    /* ===== Info Modal wiring (robust) ===== */
+    const openInfoBtn = document.getElementById('openInfoBtn');
     const backdrop = document.getElementById('modalBackdrop');
     const modal = document.getElementById('infoModal');
+    const modalCard = document.getElementById('modalCard');
+    const modalClose = document.getElementById('modalClose');
+
     function openModal(){
       backdrop.classList.add('open');
       modal.classList.add('open');
       modal.setAttribute('aria-hidden','false');
       backdrop.setAttribute('aria-hidden','false');
+      document.body.style.overflow = 'hidden'; // prevent background scroll
     }
     function closeModal(){
       backdrop.classList.remove('open');
       modal.classList.remove('open');
       modal.setAttribute('aria-hidden','true');
       backdrop.setAttribute('aria-hidden','true');
+      document.body.style.overflow = ''; // restore scroll
     }
-    document.addEventListener('click', (e)=>{
-      if(e.target && e.target.id === 'openInfoBtn'){ openModal(); }
-      if(e.target && (e.target.id === 'modalClose' || e.target.id === 'modalBackdrop')){ closeModal(); }
-    });
-    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeModal(); });
+
+    if (openInfoBtn) openInfoBtn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); openModal(); });
+
+    // Close via dedicated button
+    if (modalClose) modalClose.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeModal(); });
+
+    // Close by clicking backdrop
+    if (backdrop) backdrop.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeModal(); });
+
+    // Swallow clicks inside the card so they don't hit the map
+    if (modalCard) modalCard.addEventListener('click', (e)=>{ e.stopPropagation(); });
+
+    // Prevent modal container from forwarding clicks to the map
+    if (modal) modal.addEventListener('click', (e)=>{ e.stopPropagation(); });
+
+    // Esc to close
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal.classList.contains('open')) closeModal(); });
 
     // Kick off
     window.addEventListener('load', bootstrap);
