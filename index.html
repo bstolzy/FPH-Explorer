@@ -12,8 +12,7 @@
   }
   html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px system-ui,Arial,sans-serif}
   #wrap{height:100%;display:grid;grid-template-rows:1fr}
-  #map{height:100vh;margin-left:var(--sidebar);transition:margin .25s ease}
-
+  #map{height:100vh;margin-left:var(--sidebar)}
   .btn{padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:#0f172a;color:var(--text);cursor:pointer}
   .btn:disabled{opacity:.5;cursor:not-allowed}
   label{font-weight:600}
@@ -24,7 +23,7 @@
   #leftPanel{
     position:fixed;top:0;left:0;bottom:0;width:var(--sidebar);background:var(--panel);
     border-right:1px solid var(--border);z-index:1002;padding:12px;display:grid;grid-auto-rows:min-content;gap:12px;
-    overflow-y:auto; overscroll-behavior:contain; transition:transform .25s ease;
+    overflow-y:auto; overscroll-behavior:contain;
   }
   #leftPanel h3{margin:0 0 6px 0;font-size:13px;color:var(--muted);letter-spacing:.02em}
   .group{padding:10px;border:1px solid var(--border);border-radius:10px;background:#0f172a}
@@ -41,11 +40,11 @@
   /* Bottom chart */
   #bottomPanel{
     position:fixed;left:var(--sidebar);right:0;bottom:0;background:#0f172a;
-    border-top:1px solid var(--border);transform:translateY(100%);transition:transform .25s ease,left .25s ease;
+    border-top:1px solid var(--border);transform:translateY(100%);transition:transform .25s ease;
     z-index:1003; display:grid;grid-template-rows:auto 1fr;max-height:48vh;box-shadow:0 -14px 40px rgba(0,0,0,.4)
   }
   #bottomPanel.open{transform:translateY(0)}
-  #bpTop{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;gap:8px}
+  #bpTop{display:flex;align-items:center;justify-content:space-between;padding:10px 14px}
   #bpTitle{font:14px system-ui,Arial}
   #bpInfo{color:var(--muted);font-size:12px;margin-left:8px}
   #bpClose{border:none;background:#0f172a;color:var(--text);padding:6px 10px;border-radius:8px;cursor:pointer}
@@ -90,7 +89,7 @@
   }
   .modal.open{ display:flex; }
 
-  /* Modal card */
+  /* 🔹 Redesigned modal card (dark gradient, animated) */
   .modal-card{
     background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
     color:#e2e8f0;
@@ -104,15 +103,21 @@
   }
   .modal.open .modal-card { animation: fadeInUp .4s ease forwards; }
   @keyframes fadeInUp { from{transform:translateY(40px);opacity:0;} to{transform:translateY(0);opacity:1;} }
+
   .modal-card h2 {
-    margin: 0 0 16px 0;
-    font-size: 28px;
-    font-weight: 700;
-    background: linear-gradient(90deg, #60a5fa, #a78bfa);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+  margin: 0 0 16px 0;
+  font-size: 28px;         /* bigger title */
+  font-weight: 700;        /* stronger weight */
+  background: linear-gradient(90deg, #60a5fa, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+  
+  .modal-card h3{
+    margin:16px 0 10px 0; font-size:16px; color:#f8fafc;
+    border-left:3px solid #60a5fa; padding-left:8px;
   }
-  .modal-card h3{ margin:16px 0 10px 0; font-size:16px; color:#f8fafc; border-left:3px solid #60a5fa; padding-left:8px; }
   .modal-card p{ margin:0 0 12px 0; line-height:1.6; }
   .modal-card ul{ margin:8px 0 12px 18px; }
   .modal-card li{ margin:6px 0; }
@@ -124,34 +129,6 @@
   .modal-close:hover{ background:#334155; }
 
   .leaflet-control.custom-info-control{ margin-bottom:8px; }
-
-  /* 🔹 Hamburger (mobile) */
-  .hamburger{
-    padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:#0b1020;color:var(--text);cursor:pointer;
-    font-size:18px; line-height:1;
-  }
-
-  /* 🔹 Drawer backdrop (mobile) */
-  #drawerBackdrop{
-    position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; z-index:1001;
-  }
-  #drawerBackdrop.open{ display:block; }
-
-  /* 🔹 Responsive @ 800px */
-  @media (max-width: 800px){
-    :root{ --sidebar: 0px; }
-    #map{ margin-left: 0; }
-    /* slide-in drawer */
-    #leftPanel{
-      width: min(86vw, 380px);
-      transform: translateX(-100%);
-      box-shadow: 12px 0 40px rgba(0,0,0,.5);
-    }
-    #leftPanel.open{ transform: translateX(0); }
-    /* bottom panel sits full-width on mobile, a bit taller for usability */
-    #bottomPanel{ left:0; max-height:50vh; }
-    #chart{ height:42vh; }
-  }
 </style>
 </head>
 <body>
@@ -173,6 +150,7 @@
           <label><input type="radio" name="metric" value="depth"/> Depth (m)</label>
           <label><input type="radio" name="metric" value="vol"/> Volume (ML)</label>
         </div>
+        <!-- (Removed the explanatory text line as requested) -->
       </div>
 
       <div class="group">
@@ -215,17 +193,11 @@
     <div id="map"></div>
   </div>
 
-  <!-- Drawer backdrop (mobile) -->
-  <div id="drawerBackdrop" aria-hidden="true"></div>
-
   <!-- Bottom chart panel -->
   <div id="bottomPanel" aria-hidden="true">
     <div id="bpTop">
       <div id="bpTitle"><strong id="bpTitleText">—</strong> <span id="bpInfo"></span></div>
-      <div class="inline">
-        <button id="bpResetZoom" class="btn" title="Reset chart zoom">Reset Zoom</button>
-        <button id="bpClose">Close</button>
-      </div>
+      <button id="bpClose">Close</button>
     </div>
     <div id="bpBody"><canvas id="chart"></canvas></div>
   </div>
@@ -261,8 +233,6 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <!-- 🔎 Chart pan/zoom plugin -->
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
   <script>
     /* ===== Config ===== */
@@ -271,7 +241,7 @@
       catchments: 'data/catchments.geojson',
       csv: 'data/final_export.csv'
     };
-    const CACHE_BUST = '?v=2025-10-17a'; // bump for GH Pages cache
+    const CACHE_BUST = '?v=2025-10-16c';
 
     /* ===== Helpers ===== */
     function safeBlock(el){ try{ if(el){ L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);} }catch{} }
@@ -305,11 +275,7 @@
       streets:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}),
       imagery:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Imagery &copy; Esri — Sources: Esri, Maxar, USGS, etc.'})
     };
-    const map=L.map('map',{layers:[baseLayers.streets]});
-
-    // Make sure map fills initially (esp. on mobile when panels slide)
-    function fitInitial(){ try{ map.setView([-27.5,146],5); }catch{} }
-    fitInitial();
+    const map=L.map('map',{layers:[baseLayers.streets]}).setView([-27.5,146],5);
 
     /* Info button (top-right) */
     const InfoControl = L.Control.extend({
@@ -327,19 +293,6 @@
     });
     new InfoControl().addTo(map);
 
-    /* 🔹 Hamburger control (top-left on map) */
-    const MenuControl = L.Control.extend({
-      options:{ position:'topleft' },
-      onAdd:function(){
-        const c = L.DomUtil.create('div','leaflet-control');
-        c.style.padding='6px'; c.style.borderRadius='8px'; c.style.border='1px solid var(--border)'; c.style.background='#0f172a';
-        c.innerHTML = '<button id="menuBtn" class="hamburger" aria-label="Open menu">☰</button>';
-        L.DomEvent.disableClickPropagation(c); L.DomEvent.disableScrollPropagation(c);
-        return c;
-      }
-    });
-    new MenuControl().addTo(map);
-
     /* Overlays & control */
     const groups={ polygons:L.featureGroup({pane:'polysPane'}).addTo(map), catchments:L.featureGroup({pane:'catchmentsPane'}).addTo(map) };
     L.control.layers(null, { 'Storages':groups.polygons, 'Catchments':groups.catchments }, {collapsed:false,position:'topright'}).addTo(map);
@@ -350,7 +303,6 @@
         Object.values(baseLayers).forEach(l=>{ if(map.hasLayer(l)) map.removeLayer(l); });
         map.addLayer(baseLayers[r.value]);
         updateLegend(); 
-        setTimeout(()=>map.invalidateSize(), 50);
       });
     });
 
@@ -378,8 +330,9 @@
     }
     const catchmentBaseStyle=(f)=>{ const p=f?.properties||{}; const n=getCatchmentName(p); const c=catchmentBaseColor(n); return {color:c,weight:2,opacity:.9,fillColor:c,fillOpacity:.16}; };
 
-    // Storage legend ramp: near-white to dark blue
+    // Storage legend ramp: near-white to dark (not navy) blue
     const baseRamp = ['#F7FAFF','#E6F0FF','#C9DEFF','#A7C8FF','#86B2FF','#5F95FF','#3B78F0','#1C63E3'];
+    // Catchment ramp: slightly darker to compensate for 0.75 alpha
     function darkenHex(hex, f){
       const h = hex.replace('#','');
       const n = h.length === 3 ? h.split('').map(c=>c+c).join('') : h;
@@ -425,7 +378,6 @@
     const fitBtn=document.getElementById('fitBtn');
     fitBtn.addEventListener('click',()=>{ 
       try{ const b=L.featureGroup([groups.polygons,groups.catchments]).getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{} 
-      setTimeout(()=>map.invalidateSize(), 50);
     });
 
     const bottomPanel=document.getElementById('bottomPanel'),
@@ -433,9 +385,7 @@
       bpTitleText=document.getElementById('bpTitleText'),
       bpInfo=document.getElementById('bpInfo');
     const bpClose=document.getElementById('bpClose'); 
-    const bpResetZoom=document.getElementById('bpResetZoom');
-    bpClose.addEventListener('click',()=>{ bottomPanel.classList.remove('open'); bottomPanel.setAttribute('aria-hidden','true'); setTimeout(()=>map.invalidateSize(), 60); });
-    bpResetZoom.addEventListener('click',()=>{ try{ chart.resetZoom(); }catch{} });
+    bpClose.addEventListener('click',()=>{ bottomPanel.classList.remove('open'); bottomPanel.setAttribute('aria-hidden','true'); });
 
     const ctx=document.getElementById('chart').getContext('2d'); let chart=null;
     function drawLine(points, yLabel, title, color){
@@ -455,20 +405,7 @@
             x:{ type:'time', time:{unit:'month'}, ticks:{color:'#dfe6f5'}, grid:{color:'rgba(255,255,255,0.22)'} },
             y:{ min:0, ticks:{color:'#dfe6f5'}, grid:{color:'rgba(255,255,255,0.22)'}, title:{display:true,text:yLabel,color:'#e5e7eb'} }
           },
-          plugins:{
-            legend:{display:false},
-            title:{display:true,text:title,color:'#fff',align:'center',font:{weight:'600',size:16}},
-            zoom:{
-              limits:{ y:{min:0} },
-              pan:{ enabled:true, mode:'x' },
-              zoom:{
-                wheel:{ enabled:true },
-                pinch:{ enabled:true },   // 👈 pinch-zoom on mobile
-                drag:{ enabled:false },
-                mode:'x'
-              }
-            }
-          }
+          plugins:{ legend:{display:false}, title:{display:true,text:title,color:'#fff',align:'center',font:{weight:'600',size:16}} }
         }
       });
     }
@@ -493,6 +430,7 @@
           : ' — no CSV rows.';
 
         drawLine(pts, yAxisUnits(currentMetric), title);
+        if (bpTop) bpTop.style.borderBottom = '1px solid var(--border)';
 
       } else if (sel.type==='catchment'){
         let key = currentMetric; if (key==='depth') key='wsa';
@@ -508,11 +446,11 @@
 
         const lineColor = catchmentBaseColor(sel.cname);
         drawLine(pts, yAxisUnits(key), title, lineColor);
+        if (bpTop) bpTop.style.borderBottom = `2px solid ${lineColor}`;
       }
+
       bottomPanel.classList.add('open');
       bottomPanel.setAttribute('aria-hidden','false');
-      setTimeout(()=>chart && chart.resize(0,0), 30);
-      setTimeout(()=>map.invalidateSize(), 60);
     }
 
     /* ===== Aggregation ===== */
@@ -546,6 +484,7 @@
       seriesByGEEID.set(id, bucket);
       if(!isNaN(t)){ addCatchAgg(bucket.catchment || catchName, t.getTime(), wsa, vol); }
 
+      // Build catchment membership set
       if(catchName){
         if(!catchmentToIDs.has(catchName)) catchmentToIDs.set(catchName,new Set());
         catchmentToIDs.get(catchName).add(id);
@@ -721,7 +660,7 @@
         lyr.setStyle(style);
       });
 
-      groups.polygons.bringToFront();
+      groups.polygons.bringToFront(); // storages always on top
     }
 
     function resetChoropleth(){
@@ -788,7 +727,7 @@
           const cname=getCatchmentName(feature.properties||{});
           lyr._cname = cname;
 
-          // Hover tooltip
+          // 🟦 Restore hover tooltip with name
           lyr.bindTooltip(cname, {
             sticky:true, direction:'top', offset:[0,-4], className:'catch-tooltip'
           });
@@ -839,15 +778,13 @@
         // Auto-open the information modal on load
         openModal();
 
-        setTimeout(()=>map.invalidateSize(), 80);
-
       }catch(e){
         console.error(e);
         detailEl.textContent='Error loading data: '+ e.message + ' — check file names/paths and GitHub Pages case-sensitivity.';
       }
     }
 
-    /* ===== Slider + play ===== */
+    /* ===== Slider + play (no duplicate consts) ===== */
     let playing=false, timer=null;
     timeSlider.addEventListener('input',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
     btnPrev.addEventListener('click',()=>{ if(!toggleTime.checked) return; const i=Math.max(0,+timeSlider.value-1); timeSlider.value=i; recolorForFrame(i); });
@@ -891,45 +828,7 @@
     if (backdrop)    backdrop   .addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeModal(); });
     if (modalCard)   modalCard  .addEventListener('click', (e)=>{ e.stopPropagation(); });
     if (modal)       modal      .addEventListener('click', (e)=>{ e.stopPropagation(); });
-
-    /* ===== Drawer (mobile) wiring ===== */
-    const drawer = document.getElementById('leftPanel');
-    const drawerBackdrop = document.getElementById('drawerBackdrop');
-    const menuBtn = document.getElementById('menuBtn');
-    function openDrawer(){
-      drawer.classList.add('open');
-      drawerBackdrop.classList.add('open');
-      document.body.style.overflow='hidden';
-      setTimeout(()=>map.invalidateSize(), 80);
-    }
-    function closeDrawer(){
-      drawer.classList.remove('open');
-      drawerBackdrop.classList.remove('open');
-      document.body.style.overflow='';
-      setTimeout(()=>map.invalidateSize(), 80);
-    }
-    if(menuBtn) menuBtn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); openDrawer(); });
-    if(drawerBackdrop) drawerBackdrop.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeDrawer(); });
-
-    // Close drawer with ESC
-    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ closeDrawer(); if(modal.classList.contains('open')) closeModal(); } });
-
-    // Keep map sized on resize + handle breakpoint changes
-    const mq = window.matchMedia('(max-width: 800px)');
-    function onBreakChange(){
-      if(!mq.matches){ // desktop
-        closeDrawer();
-        // align bottom panel with sidebar on desktop
-        bottomPanel.style.left = 'var(--sidebar)';
-      }else{
-        // full-width bottom panel on mobile
-        bottomPanel.style.left = '0px';
-      }
-      setTimeout(()=>map.invalidateSize(), 60);
-    }
-    mq.addEventListener?.('change', onBreakChange);
-    window.addEventListener('resize', ()=>setTimeout(()=>map.invalidateSize(), 60));
-    onBreakChange();
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal.classList.contains('open')) closeModal(); });
 
     /* ===== Start ===== */
     window.addEventListener('load', bootstrap);
