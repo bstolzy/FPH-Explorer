@@ -104,11 +104,16 @@
   .modal.open .modal-card { animation: fadeInUp .4s ease forwards; }
   @keyframes fadeInUp { from{transform:translateY(40px);opacity:0;} to{transform:translateY(0);opacity:1;} }
 
-  .modal-card h2{
-    margin:0 0 12px 0; font-size:20px;
-    background:linear-gradient(90deg, #60a5fa, #a78bfa);
-    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-  }
+  .modal-card h2 {
+  margin: 0 0 16px 0;
+  font-size: 28px;         /* bigger title */
+  font-weight: 700;        /* stronger weight */
+  background: linear-gradient(90deg, #60a5fa, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+  
   .modal-card h3{
     margin:16px 0 10px 0; font-size:16px; color:#f8fafc;
     border-left:3px solid #60a5fa; padding-left:8px;
@@ -202,7 +207,6 @@
   <div id="infoModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-hidden="true">
     <div id="modalCard" class="modal-card">
       <h2 id="infoTitle">Information</h2>
-      <p style="margin-top:-6px;font-size:13px;color:#94a3b8;">A satellite-powered look into Australia’s hidden floodplain storages</p>
 
       <h3>🌊 <strong>Floodplain Harvesting Introduction</strong></h3>
       <p>The Murray–Darling Basin (MDB) is Australia’s largest river system and the heart of the country’s agricultural production. In the north of the Basin, large floods spill across floodplains where water can be captured in on-farm storages, sometimes tens of hectares in size. This practice, known as <em>floodplain harvesting</em>, helps farmers secure water for irrigation and improve reliability for crops and regional communities. However, capturing this water before it returns to rivers can reduce downstream flows that are vital for towns, wetlands, and floodplain ecosystems.</p>
