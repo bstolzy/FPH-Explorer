@@ -763,13 +763,11 @@
       playing=true; btnPlay.textContent='Pause';
       timer=setInterval(()=>{ let i=+timeSlider.value+1; if(i>frameTicks.length-1) i=0; timeSlider.value=i; recolorForFrame(i); }, 400);
     });
-    const toggleTime=document.getElementById('toggleTime');
     toggleTime.addEventListener('change',()=>{
       const on=toggleTime.checked; timeControls.style.display=on?'':'none';
       if(!on){ if(playing){ playing=false; clearInterval(timer); btnPlay.textContent='Play'; } resetChoropleth(); }
       else{ recolorForFrame(+timeSlider.value||0); }
     });
-    const toggleCatchChoro=document.getElementById('toggleCatchChoro');
     toggleCatchChoro.addEventListener('change',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
 
     /* ===== Info Modal wiring ===== */
