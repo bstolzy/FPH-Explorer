@@ -113,7 +113,6 @@
           <label><input type="radio" name="metric" value="depth"/> Depth (m)</label>
           <label><input type="radio" name="metric" value="vol"/> Volume (ML)</label>
         </div>
-        <div class="small">Catchment charts & shading support <b>WSA & Volume</b>. (Depth is per-storage only.)</div>
       </div>
 
       <div class="group">
@@ -706,16 +705,32 @@
     }
 
     function loadCatchments(gj){
-      groups.catchments.clearLayers();
-      L.geoJSON(gj,{
-        pane:'catchmentsPane', renderer: catchSVG, style:catchmentBaseStyle, interactive:true, bubblingMouseEvents:true,
-        onEachFeature:(feature,lyr)=>{
-          const cname=getCatchmentName(feature.properties||{});
-          lyr._cname = cname;
-          lyr.on('click',()=>{ lastSelected={type:'catchment', cname:lyr._cname}; openPanel(lastSelected); });
-        }
-      }).addTo(groups.catchments);
+  groups.catchments.clearLayers();
+  L.geoJSON(gj, {
+    pane:'catchmentsPane',
+    renderer: catchSVG,
+    style: catchmentBaseStyle,
+    interactive:true,
+    bubblingMouseEvents:true,
+    onEachFeature:(feature, lyr)=>{
+      const cname = getCatchmentName(feature.properties || {});
+      lyr._cname = cname;
+
+      // 🔹 Add a persistent tooltip when hovering
+      lyr.bindTooltip(cname, {
+        sticky: true,
+        direction: 'top',
+        offset: [0, -4],
+        className: 'catch-tooltip'
+      });
+
+      lyr.on('click', () => {
+        lastSelected = { type:'catchment', cname: lyr._cname };
+        openPanel(lastSelected);
+      });
     }
+  }).addTo(groups.catchments);
+}
 
     function finalizeCSV(){
       // Sort rows and compute caps
