@@ -12,13 +12,11 @@
   }
   html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px system-ui,Arial,sans-serif}
   #wrap{height:100%;display:grid;grid-template-rows:1fr}
-  /* Map fills full height; left panel carves out margin */
   #map{height:100vh;margin-left:var(--sidebar)}
   .btn{padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:#0f172a;color:var(--text);cursor:pointer}
   .btn:disabled{opacity:.5;cursor:not-allowed}
   label{font-weight:600}
   .hint{color:var(--muted);font-size:12px}
-  /* Remove the focus rectangle that appears on clicked polygons/catchments */
   .leaflet-interactive:focus { outline: none !important; }
 
   /* Left panel (scrollable) */
@@ -40,7 +38,7 @@
   input[type="month"]::-webkit-calendar-picker-indicator{ filter: invert(1) brightness(1.2); opacity: 1; }
   input[type="month"]::-webkit-datetime-edit, input[type="month"]{ color: var(--text); }
 
-  /* Bottom chart (clears left panel) */
+  /* Bottom chart */
   #bottomPanel{
     position:fixed;left:var(--sidebar);right:0;bottom:0;background:#0f172a;
     border-top:1px solid var(--border);transform:translateY(100%);transition:transform .25s ease;
@@ -56,33 +54,26 @@
 
   .leaflet-control{background:#0f172a;color:var(--text);border:1px solid var(--border)}
   .leaflet-control a{color:var(--text)}
-
-  /* Ensure zoom controls are fully visible */
   .leaflet-top.leaflet-left{ left:10px; top:10px; }
 
-  /* Legend styles (single legend, aligned chips) */
+  /* Legend */
   .legend{
     background:#0f172a;border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:var(--text);
     box-shadow:0 6px 20px rgba(0,0,0,.35); min-width: 240px;
   }
   .legend h4{margin:0 0 6px 0;font-size:13px;color:#e5e7eb}
   .legend .sub{color:var(--muted);font-size:12px;margin-bottom:6px}
-  /* Chips stretch edge to edge so first aligns to 0% and last aligns to 100% */
-  .legend .ramp{
-    display:flex; justify-content:space-between; align-items:center;
-    gap:0; margin:8px 0; width:100%;
-  }
+  .legend .ramp{display:flex;justify-content:space-between;align-items:center;gap:0;margin:8px 0;width:100%}
   .legend .sw{width:22px;height:14px;border-radius:3px;border:1px solid #0b1222}
   .legend .ticks{display:flex;justify-content:space-between;font-size:12px;color:#d1d5db}
 
-  /* ===== Modal (Info) ===== */
+  /* Modal */
   .modal-backdrop{
     position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; z-index:3000;
   }
   .modal-backdrop.open{ display:block; }
   .modal{
-    position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:3001;
-    padding:20px;
+    position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:3001; padding:20px;
   }
   .modal.open{ display:flex; }
   .modal-card{
@@ -100,7 +91,6 @@
   }
   .modal-close:hover{ background:#eef2f7; }
 
-  /* Put a little margin under the Info control so Layers sits just below it */
   .leaflet-control.custom-info-control{ margin-bottom:8px; }
 </style>
 </head>
@@ -157,8 +147,6 @@
         </div>
       </div>
 
-      <!-- Selection group removed; storages always on top -->
-
       <div class="group">
         <h3>Status</h3>
         <div class="small" id="detail">Fetching data…</div>
@@ -196,7 +184,8 @@
         <li>Click any <strong>storage</strong> or <strong>catchment</strong> to view its time-series chart.</li>
         <li>Compare shading intensity to understand how full each storage is. Storages are opaque and match the legend exactly; catchments are slightly transparent but appear visually similar.</li>
       </ul>
-      <p>This tool provides the <strong>first Basin-wide, publicly accessible visualisation of floodplain harvesting behaviour.</strong> Look out for the <strong>massive flooding in 2022</strong> and enjoy exploring!</p>
+      <p><strong>This tool provides the first Basin-wide, publicly accessible visualisation of floodplain harvesting behaviour.</strong></p>
+      <p>Look out for the massive flooding in 2022 and enjoy exploring!</p>
 
       <div class="modal-actions">
         <button id="modalClose" class="modal-close" type="button">Close</button>
@@ -209,13 +198,13 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
   <script>
-    /* ===== Config: paths to public data (relative to repo root) ===== */
+    /* ===== Config ===== */
     const DATA = {
       polygons: 'data/polygons.geojson',
       catchments: 'data/catchments.geojson',
       csv: 'data/final_export.csv'
     };
-    const CACHE_BUST = '?v=2025-10-16';
+    const CACHE_BUST = '?v=2025-10-16b';
 
     /* ===== Helpers ===== */
     function safeBlock(el){ try{ if(el){ L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);} }catch{} }
@@ -251,7 +240,7 @@
     };
     const map=L.map('map',{layers:[baseLayers.streets]}).setView([-27.5,146],5);
 
-    /* -- Info button (top-right) above layer control -- */
+    /* Info button (top-right) */
     const InfoControl = L.Control.extend({
       options:{ position:'topright' },
       onAdd:function(){
@@ -267,7 +256,7 @@
     });
     new InfoControl().addTo(map);
 
-    /* -- Overlay groups & layer control (sits below Info) -- */
+    /* Overlays & control */
     const groups={ polygons:L.featureGroup({pane:'polysPane'}).addTo(map), catchments:L.featureGroup({pane:'catchmentsPane'}).addTo(map) };
     L.control.layers(null, { 'Storages':groups.polygons, 'Catchments':groups.catchments }, {collapsed:false,position:'topright'}).addTo(map);
 
@@ -283,14 +272,11 @@
     // Panes: storages ALWAYS above catchments
     map.createPane('catchmentsPane'); const catchmentsPane=map.getPane('catchmentsPane'); catchmentsPane.style.zIndex=401;
     map.createPane('polysPane'); const polysPane=map.getPane('polysPane'); polysPane.style.zIndex=402;
-
-    // SVG renderers
     const catchSVG = L.svg({ pane: 'catchmentsPane' });
     const polySVG  = L.svg({ pane: 'polysPane' });
-
     safeBlock(document.getElementById('leftPanel')); safeBlock(document.getElementById('bottomPanel'));
 
-    /* ===== Styles & colors ===== */
+    /* ===== Styles & color ramps ===== */
     const BLUE='#4ea1ff';
     const STYLE_POLY = {color:'#0b3d91',weight:1,opacity:.9,fillColor:'var(--poly)',fillOpacity:1.0}; /* storages opaque */
     const PALETTE=['#6b7280','#a3a3a3','#94a3b8','#9ca3af','#737373','#64748b','#475569','#374151','#4b5563','#1f2937'];
@@ -307,23 +293,37 @@
     }
     const catchmentBaseStyle=(f)=>{ const p=f?.properties||{}; const n=getCatchmentName(p); const c=catchmentBaseColor(n); return {color:c,weight:2,opacity:.9,fillColor:c,fillOpacity:.16}; };
 
+    // Storage legend ramp: near-white to dark (not navy) blue
+    const baseRamp = [
+      '#F7FAFF','#E6F0FF','#C9DEFF','#A7C8FF','#86B2FF','#5F95FF','#3B78F0','#1C63E3'
+    ];
+    // Catchment ramp: slightly darker to compensate for 0.75 alpha
+    function darkenHex(hex, f){
+      const h = hex.replace('#','');
+      const n = h.length === 3 ? h.split('').map(c=>c+c).join('') : h;
+      const i = parseInt(n,16);
+      const r = Math.max(0, Math.round(((i>>16)&255) * (1 - f)));
+      const g = Math.max(0, Math.round(((i>>8)&255)  * (1 - f)));
+      const b = Math.max(0, Math.round((i&255)       * (1 - f)));
+      const to2 = v => v.toString(16).padStart(2,'0');
+      return `#${to2(r)}${to2(g)}${to2(b)}`;
+    }
+    const catchmentRamp = baseRamp.map(c=>darkenHex(c, 0.14)); // ~14% darker
+    const CATCHMENT_ALPHA = 0.75;
+
     /* ===== Data stores ===== */
     const detailEl=document.getElementById('detail');
-    const polygonIdSet=new Set();
-    const seriesByGEEID=new Map(); // id -> {rows:[{t,wsa,depth,vol}], catchment}
-    const polyCatch=new Map();      // id -> catchment
-    const catchmentToIDs=new Map(); // catchment -> Set(ids)
-    const catchAgg=new Map();       // cname -> { wsa:[{x,y}], vol:[{x,y}] }
-
-    // Capacities (P95) and percent maps
-    const capsByID = new Map();     // id -> {wsaCap, depthCap, volCap}
-    const capsByCatch = new Map();  // cname -> {wsaCapSum, volCapSum}
+    const seriesByGEEID=new Map();
+    const catchmentToIDs=new Map();
+    const catchAgg=new Map();
+    const capsByID = new Map();
+    const capsByCatch = new Map();
 
     let frameTicks=[]; const MIN_FRAME_UTC=Date.UTC(2015,10,1);
-    let polyInterp={}, catchInterp={};  // absolute values per frame
-    let polyPct={}, catchPct={};        // percent-fullness per frame
+    let polyInterp={}, catchInterp={};
+    let polyPct={}, catchPct={};
 
-    // UI
+    /* ===== UI & chart ===== */
     const metricRadios=document.querySelectorAll('input[name="metric"]');
     let currentMetric='wsa';
     metricRadios.forEach(r=>r.addEventListener('change',()=>{ 
@@ -341,15 +341,17 @@
     const toggleCatchChoro=document.getElementById('toggleCatchChoro');
 
     const fitBtn=document.getElementById('fitBtn');
-    fitBtn.addEventListener('click',()=>{ const all=L.featureGroup([groups.polygons,groups.catchments]); try{ const b=all.getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{};});
+    fitBtn.addEventListener('click',()=>{ 
+      try{ const b=L.featureGroup([groups.polygons,groups.catchments]).getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{} 
+    });
 
-    // Chart
     const bottomPanel=document.getElementById('bottomPanel'),
       bpTop=document.getElementById('bpTop'),
       bpTitleText=document.getElementById('bpTitleText'),
       bpInfo=document.getElementById('bpInfo');
+    const bpClose=document.getElementById('bpClose'); 
+    bpClose.addEventListener('click',()=>{ bottomPanel.classList.remove('open'); bottomPanel.setAttribute('aria-hidden','true'); });
 
-    const bpClose=document.getElementById('bpClose'); bpClose.addEventListener('click',()=>{ bottomPanel.classList.remove('open'); bottomPanel.setAttribute('aria-hidden','true'); });
     const ctx=document.getElementById('chart').getContext('2d'); let chart=null;
     function drawLine(points, yLabel, title, color){
       const c = color || BLUE;
@@ -358,9 +360,11 @@
         type:'line',
         data:{ datasets:[{
           data:points, parsing:false,
-          borderColor: c, backgroundColor:'transparent',
+          borderColor:c, backgroundColor:'transparent',
           borderWidth:2, tension:0, spanGaps:false,
-          pointRadius:2, pointBackgroundColor:c, pointBorderWidth:0
+          pointRadius:0,            /* line-only */
+          pointHitRadius:6,         /* still hoverable */
+          pointHoverRadius:3
         }]},
         options:{
           animation:false, maintainAspectRatio:false, parsing:false,
@@ -381,12 +385,7 @@
       if(sel.type==='polygon'){
         const bucket = seriesByGEEID.get(sel.id);
         const key = (currentMetric==='wsa' ? 'wsa' : (currentMetric==='depth' ? 'depth' : 'vol'));
-        let pts = [];
-        if (bucket) {
-          pts = bucket.rows
-            .filter(r => Number.isFinite(r[key]))
-            .map(r => ({ x: r.t.getTime(), y: r[key] }));
-        }
+        const pts = (bucket?.rows||[]).filter(r => Number.isFinite(r[key])).map(r => ({ x: r.t.getTime(), y: r[key] }));
         const catchName = bucket?.catchment ? ` (${bucket.catchment})` : '';
         const idPad = idFive(sel.id);
         const title = `Storage ID ${idPad}${catchName} ${metricLabel(currentMetric)} Timeseries`;
@@ -401,9 +400,7 @@
         if (bpTop) bpTop.style.borderBottom = '1px solid var(--border)';
 
       } else if (sel.type==='catchment'){
-        let key = currentMetric;
-        if (key==='depth') key='wsa';
-
+        let key = currentMetric; if (key==='depth') key='wsa';
         const agg = catchAgg.get(sel.cname);
         const pts = (key==='wsa') ? (agg?.wsa || []) : (agg?.vol || []);
         const title = `${sel.cname} Aggregated ${metricLabel(key)} Timeseries`;
@@ -423,7 +420,7 @@
       bottomPanel.setAttribute('aria-hidden','false');
     }
 
-    /* ===== CSV ingest + observed catchment aggregation ===== */
+    /* ===== Aggregation ===== */
     function addCatchAgg(cname, tms, wsa, vol){
       if(!catchAgg.has(cname)) catchAgg.set(cname, {raw:new Map(), wsa:[], vol:[]});
       const bucket=catchAgg.get(cname);
@@ -439,6 +436,8 @@
         obj.vol=rows.filter(([t,v])=>Number.isFinite(v.vol)).map(([t,v])=>({x:t,y:v.vol}));
       }
     }
+
+    /* ===== CSV ingestion ===== */
     function handleCSVRow(row){
       const idRaw=row['GEEID']; if(!idRaw) return; const id=String(idRaw).trim();
       const t=parseTime(row['Timestamp']);
@@ -451,17 +450,18 @@
       if(!bucket.catchment && catchName) bucket.catchment=catchName;
       seriesByGEEID.set(id, bucket);
       if(!isNaN(t)){ addCatchAgg(bucket.catchment || catchName, t.getTime(), wsa, vol); }
-    }
-    function ensureCatchmentMappingCompleteness(){
-      const csvNames=new Set(); for(const [,obj] of seriesByGEEID) if(obj?.catchment) csvNames.add(obj.catchment);
-      const polyNames=new Set(catchmentToIDs.keys());
-      const all=new Set([...csvNames, ...polyNames]);
-      for(const cname of all){ if(!catchmentToIDs.has(cname)) catchmentToIDs.set(cname,new Set()); }
+
+      // Build catchment membership set
+      if(catchName){
+        if(!catchmentToIDs.has(catchName)) catchmentToIDs.set(catchName,new Set());
+        catchmentToIDs.get(catchName).add(id);
+      }
     }
 
     const EPS = 1e-6, MIN_NONZERO = 3, PCTILE = 0.95;
     function computeCapacities(){
       capsByID.clear(); capsByCatch.clear();
+
       for(const [id,obj] of seriesByGEEID.entries()){
         const W = obj.rows.map(r=>r.wsa).filter(v=>Number.isFinite(v) && v>EPS);
         const D = obj.rows.map(r=>r.depth).filter(v=>Number.isFinite(v) && v>EPS);
@@ -471,6 +471,7 @@
         const volCap = (V.length>=MIN_NONZERO) ? percentile(V, PCTILE) : NaN;
         capsByID.set(id,{wsaCap, depthCap, volCap});
       }
+
       for(const [cname,setIDs] of catchmentToIDs.entries()){
         let w=0, v=0; let hw=false, hv=false;
         for(const id of setIDs){ const c=capsByID.get(id); if(!c) continue;
@@ -479,19 +480,6 @@
         }
         capsByCatch.set(cname,{ wsaCapSum: hw? w:NaN, volCapSum: hv? v:NaN });
       }
-    }
-
-    function finalizeCSV(){
-      polygonIdSet.clear();
-      for(const [id,obj] of seriesByGEEID.entries()){
-        obj.rows=obj.rows.filter(r=>r.t instanceof Date && !isNaN(r.t)).sort((a,b)=>a.t-b.t);
-        polygonIdSet.add(id);
-      }
-      finalizeCatchAgg();
-      ensureCatchmentMappingCompleteness();
-      computeCapacities();
-      buildFramesAndInterpolation();
-      detailEl.textContent=`Loaded ✓ (${polygonIdSet.size.toLocaleString()} polygons)`;
     }
 
     /* ===== Frames + interpolation ===== */
@@ -510,24 +498,6 @@
       return { wsa:lerp(a.wsa,b.wsa), depth:lerp(a.depth,b.depth), vol:lerp(a.vol,b.vol) };
     }
 
-    function rebuildCatchAggFromFrames(){
-      catchAgg.clear();
-      if (!frameTicks.length || !catchInterp[0]) return;
-      const names = Object.keys(catchInterp[0]);
-      for (const cname of names) {
-        const wsaSeries = [];
-        const volSeries = [];
-        for (let fi = 0; fi < frameTicks.length; fi++) {
-          const t = frameTicks[fi].getTime();
-          const rec = catchInterp[fi][cname];
-          if (!rec) continue;
-          if (Number.isFinite(rec.wsa)) wsaSeries.push({ x: t, y: rec.wsa });
-          if (Number.isFinite(rec.vol)) volSeries.push({ x: t, y: rec.vol });
-        }
-        catchAgg.set(cname, { wsa: wsaSeries, vol: volSeries });
-      }
-    }
-
     function buildFramesAndInterpolation(){
       let tmin=Infinity, tmax=-Infinity;
       for(const [,obj] of seriesByGEEID.entries()){
@@ -543,11 +513,7 @@
       timeSlider.min=0; timeSlider.max=Math.max(0,frameTicks.length-1); timeSlider.value=0;
       frameLabel.textContent = 'Frame: ' + frameTicks[0].toISOString().slice(0,10);
 
-      const fmt=(d)=>`${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`;
-      document.getElementById('zoomStart').value=fmt(frameTicks[0]);
-      document.getElementById('zoomEnd').value=fmt(frameTicks[frameTicks.length-1]);
-
-      // per-storage interpolation (absolute)
+      // Storage interpolation
       polyInterp={};
       for(let fi=0; fi<frameTicks.length; fi++){
         const ft=frameTicks[fi].getTime(); polyInterp[fi]={};
@@ -557,7 +523,7 @@
         }
       }
 
-      // per-catchment sums at frames (absolute WSA & Volume)
+      // Catchment sums per frame
       const allCatchments=[...catchmentToIDs.keys()];
       catchInterp={};
       for(let fi=0; fi<frameTicks.length; fi++){
@@ -570,29 +536,31 @@
             if(Number.isFinite(pv.wsa)){ wsa+=pv.wsa; hasW=true; }
             if(Number.isFinite(pv.vol)){ vol+=pv.vol; hasV=true; }
           }
-          dict[cname]={ wsa: hasW? wsa:NaN, vol: hasV? v:NaN };
+          dict[cname]={ wsa: hasW? wsa:NaN, vol: hasV? vol:NaN };
         }
         catchInterp[fi]=dict;
       }
 
-      // === Percent-fullness (polygons & catchments) ===
+      // Percent-fullness (storages)
       polyPct={};
       for(let fi=0; fi<frameTicks.length; fi++){
-        polyPct[fi] = {};
+        const rec={};
         for(const [id, vals] of Object.entries(polyInterp[fi])){
           const caps = capsByID.get(id) || {};
           const wsaP = (Number.isFinite(vals.wsa) && Number.isFinite(caps.wsaCap) && caps.wsaCap>EPS) ? Math.max(0, Math.min(1, vals.wsa / caps.wsaCap)) : NaN;
           const depthP = (Number.isFinite(vals.depth) && Number.isFinite(caps.depthCap) && caps.depthCap>EPS) ? Math.max(0, Math.min(1, vals.depth / caps.depthCap)) : NaN;
           const volP = (Number.isFinite(vals.vol) && Number.isFinite(caps.volCap) && caps.volCap>EPS) ? Math.max(0, Math.min(1, vals.vol / caps.volCap)) : NaN;
-          polyPct[fi][id] = { wsaP, depthP, volP };
+          rec[id] = { wsaP, depthP, volP };
         }
+        polyPct[fi]=rec;
       }
 
+      // Percent-fullness (catchments)
       catchPct={};
       for(let fi=0; fi<frameTicks.length; fi++){
         const dict={};
-        for(const cname of allCatchments){
-          const rec = catchInterp[fi]?.[cname] || {};
+        for(const cname of Object.keys(catchInterp[fi])){
+          const rec = catchInterp[fi][cname] || {};
           const caps = capsByCatch.get(cname) || {};
           const wsaP = (Number.isFinite(rec.wsa) && Number.isFinite(caps.wsaCapSum) && caps.wsaCapSum>EPS) ? Math.max(0, Math.min(1, rec.wsa / caps.wsaCapSum)) : NaN;
           const volP = (Number.isFinite(rec.vol) && Number.isFinite(caps.volCapSum) && caps.volCapSum>EPS) ? Math.max(0, Math.min(1, rec.vol / caps.volCapSum)) : NaN;
@@ -601,37 +569,25 @@
         catchPct[fi]=dict;
       }
 
-      rebuildCatchAggFromFrames();
+      // Build chart series from frames (for catchments)
+      catchAgg.clear();
+      for(const cname of Object.keys(catchInterp[0]||{})){
+        const wsaSeries=[], volSeries=[];
+        for(let fi=0; fi<frameTicks.length; fi++){
+          const t = frameTicks[fi].getTime();
+          const rec = catchInterp[fi][cname];
+          if (!rec) continue;
+          if (Number.isFinite(rec.wsa)) wsaSeries.push({ x: t, y: rec.wsa });
+          if (Number.isFinite(rec.vol)) volSeries.push({ x: t, y: rec.vol });
+        }
+        catchAgg.set(cname, { wsa:wsaSeries, vol:volSeries });
+      }
 
       if(toggleTime.checked) recolorForFrame(0); else resetChoropleth();
       updateLegend();
     }
 
-    /* ===== Color ramps ===== */
-    // Storage (legend) ramp: near-white to dark (not navy) blue
-    const baseRamp = [
-      '#F7FAFF',
-      '#E6F0FF',
-      '#C9DEFF',
-      '#A7C8FF',
-      '#86B2FF',
-      '#5F95FF',
-      '#3B78F0',
-      '#1C63E3'  // dark-ish blue
-    ];
-    // Slightly darkened ramp for catchments to compensate for transparency
-    function darkenHex(hex, f){
-      const h = hex.replace('#','');
-      const n = h.length === 3 ? h.split('').map(c=>c+c).join('') : h;
-      const i = parseInt(n,16);
-      const r = Math.max(0, Math.round(((i>>16)&255) * (1 - f)));
-      const g = Math.max(0, Math.round(((i>>8)&255)  * (1 - f)));
-      const b = Math.max(0, Math.round((i&255)       * (1 - f)));
-      const to2 = v => v.toString(16).padStart(2,'0');
-      return `#${to2(r)}${to2(g)}${to2(b)}`;
-    }
-    const catchmentRamp = baseRamp.map(c=>darkenHex(c, 0.14)); // ~14% darker
-
+    /* ===== Shading helpers (robust traversal) ===== */
     function rampIndex(p){ 
       if(!Number.isFinite(p)) return -1;
       return Math.max(0, Math.min(baseRamp.length-1, Math.round(p*(baseRamp.length-1))));
@@ -639,48 +595,57 @@
     function storageColor(p){ const idx = rampIndex(p); return idx>=0 ? baseRamp[idx] : '#b8c2cc'; }
     function catchmentColorFromPct(p){ const idx = rampIndex(p); return idx>=0 ? catchmentRamp[idx] : '#b8c2cc'; }
 
+    function styleStorageLayer(lyr, fi, mKey){
+      const p=lyr.feature?.properties||{};
+      const idRaw = (p.GEEID ?? p.UNIQUEID ?? p.id ?? '');
+      const id = String(idRaw).trim();
+      if(!id) return;
+      const perc = polyPct[fi]?.[id]?.[mKey];
+      const col = storageColor(perc);
+      lyr.setStyle({fillColor:col,fillOpacity:1.0,color:'#0a1733',weight:0.8,opacity:0.7});
+    }
+
+    function styleCatchmentLayer(lyr, fi, cKey){
+      const cname = lyr._cname || getCatchmentName(lyr.feature?.properties||{});
+      const perc = catchPct[fi]?.[cname]?.[cKey];
+      const col = catchmentColorFromPct(perc);
+      const base = catchmentBaseColor(cname);
+      const style = toggleCatchChoro.checked
+        ? {fillColor:col,fillOpacity:CATCHMENT_ALPHA,color:base,weight:2,opacity:0.95}
+        : {color:base,weight:2,opacity:.9,fillColor:base,fillOpacity:.12};
+      lyr.setStyle(style);
+    }
+
+    function traverseAndStyle(group, callback){
+      group.eachLayer(l=>{
+        if (l.feature && l.setStyle) { callback(l); }
+        else if (l.eachLayer) { l.eachLayer(inner=>{ if(inner.feature && inner.setStyle) callback(inner); }); }
+      });
+    }
+
     function recolorForFrame(fi){
       if(!frameTicks.length) return;
-      const ts=frameTicks[fi]; frameLabel.textContent='Frame: '+ts.toISOString().slice(0,10);
+      frameLabel.textContent='Frame: '+frameTicks[fi].toISOString().slice(0,10);
 
-      // Polygons (storages): shade by selected metric percent — OPAQUE
       const mKey = (currentMetric==='wsa'?'wsaP': currentMetric==='depth'?'depthP':'volP');
-      groups.polygons.eachLayer(layer=>{
-        layer.eachLayer?.(lyr=>{
-          const p=lyr.feature?.properties||{}; const id=(p.GEEID ?? p.UNIQUEID ?? p.id);
-          const perc = polyPct[fi]?.[String(id).trim()]?.[mKey];
-          const col = storageColor(perc);
-          lyr.setStyle({fillColor:col,fillOpacity:1.0,color:'#0a1733',weight:0.8,opacity:0.7});
-        });
-      });
+      traverseAndStyle(groups.polygons, (lyr)=> styleStorageLayer(lyr, fi, mKey));
 
-      // Catchments: keep transparency 0.75 with compensated colors
       const cKey = (currentMetric==='depth') ? 'wsaP' : (currentMetric==='wsa' ? 'wsaP' : 'volP');
-      groups.catchments.eachLayer(layer=>{
-        layer.eachLayer?.(lyr=>{
-          const cname = lyr._cname || getCatchmentName(lyr.feature?.properties||{});
-          const perc = catchPct[fi]?.[cname]?.[cKey];
-          const col = catchmentColorFromPct(perc);
-          const base=catchmentBaseColor(cname);
-          const style=toggleCatchChoro.checked
-            ? {fillColor:col,fillOpacity:0.75,color:base,weight:2,opacity:0.95}
-            : {color:base,weight:2,opacity:.9,fillColor:base,fillOpacity:.12};
-          lyr.setStyle(style);
-        });
-      });
+      traverseAndStyle(groups.catchments, (lyr)=> styleCatchmentLayer(lyr, fi, cKey));
 
       groups.polygons.bringToFront(); // storages always on top
     }
+
     function resetChoropleth(){
-      groups.polygons.eachLayer(l=>l.eachLayer?.(lyr=>lyr.setStyle(STYLE_POLY)));
-      groups.catchments.eachLayer(l=>l.eachLayer?.(lyr=>{
+      traverseAndStyle(groups.polygons, (lyr)=> lyr.setStyle(STYLE_POLY));
+      traverseAndStyle(groups.catchments, (lyr)=>{
         const cname = lyr._cname || getCatchmentName(lyr.feature?.properties||{});
         lyr.setStyle(catchmentBaseStyle({properties:{Catchment:cname}}));
-      }));
+      });
       groups.polygons.bringToFront();
     }
 
-    /* ===== Legend (single; storages only; chips align to ticks) ===== */
+    /* ===== Legend ===== */
     const legend = L.control({position:'bottomright'});
     legend.onAdd = function(){
       const div = L.DomUtil.create('div','legend');
@@ -707,7 +672,7 @@
     }
     function updateLegend(){ buildLegendRamp(); }
 
-    /* ===== Loaders ===== */
+    /* ===== Data loading ===== */
     async function loadJSON(url){ const r=await fetch(url+CACHE_BUST); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json(); }
     async function loadText(url){ const r=await fetch(url+CACHE_BUST); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.text(); }
 
@@ -724,15 +689,17 @@
     }
 
     function loadPolygons(gj){
-      groups.polygons.clearLayers(); polygonIdSet.clear(); polyCatch.clear();
+      groups.polygons.clearLayers();
       L.geoJSON(gj,{
         pane:'polysPane', renderer: polySVG, style:STYLE_POLY, interactive:true,
         onEachFeature:(feature,lyr)=>{
           const p=feature.properties||{};
           const id=String(p.GEEID ?? p.UNIQUEID ?? p.id ?? '').trim();
           const cname=canonicalCatchmentName(p.Catchment ?? p.Catchments ?? '');
-          if(id){ polyCatch.set(id, cname || 'Unknown'); polygonIdSet.add(id); }
-          if(cname){ if(!catchmentToIDs.has(cname)) catchmentToIDs.set(cname,new Set()); if(id) catchmentToIDs.get(cname).add(id); }
+          if(cname){
+            if(!catchmentToIDs.has(cname)) catchmentToIDs.set(cname,new Set());
+            if(id) catchmentToIDs.get(cname).add(id);
+          }
           lyr.on('click',()=>{ lastSelected={type:'polygon', id, props:p}; openPanel(lastSelected); });
         }
       }).addTo(groups.polygons);
@@ -750,18 +717,35 @@
       }).addTo(groups.catchments);
     }
 
+    function finalizeCSV(){
+      // Sort rows and compute caps
+      for(const [,obj] of seriesByGEEID.entries()){
+        obj.rows=obj.rows.filter(r=>r.t instanceof Date && !isNaN(r.t)).sort((a,b)=>a.t-b.t);
+      }
+      finalizeCatchAgg();
+      computeCapacities();
+      buildFramesAndInterpolation();
+      detailEl.textContent=`Loaded ✓ (${seriesByGEEID.size.toLocaleString()} storages)`;
+    }
+
     async function bootstrap(){
       try{
         const {polys, cats, rows} = await fetchAll();
         loadPolygons(polys);
         loadCatchments(cats);
 
-        // rows → handle rows
         seriesByGEEID.clear(); catchAgg.clear(); frameTicks=[]; polyInterp={}; catchInterp={}; polyPct={}; catchPct={}; capsByID.clear(); capsByCatch.clear();
         rows.forEach(handleCSVRow);
         finalizeCSV();
 
         try{ const b=L.featureGroup([groups.polygons,groups.catchments]).getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{}
+
+        // Build legend now that DOM exists
+        updateLegend();
+
+        // Auto-open the information modal on load
+        openModal();
+
       }catch(e){
         console.error(e);
         detailEl.textContent='Error loading data: '+ e.message + ' — check file names/paths and GitHub Pages case-sensitivity.';
@@ -779,14 +763,16 @@
       playing=true; btnPlay.textContent='Pause';
       timer=setInterval(()=>{ let i=+timeSlider.value+1; if(i>frameTicks.length-1) i=0; timeSlider.value=i; recolorForFrame(i); }, 400);
     });
+    const toggleTime=document.getElementById('toggleTime');
     toggleTime.addEventListener('change',()=>{
       const on=toggleTime.checked; timeControls.style.display=on?'':'none';
       if(!on){ if(playing){ playing=false; clearInterval(timer); btnPlay.textContent='Play'; } resetChoropleth(); }
       else{ recolorForFrame(+timeSlider.value||0); }
     });
+    const toggleCatchChoro=document.getElementById('toggleCatchChoro');
     toggleCatchChoro.addEventListener('change',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
 
-    /* ===== Info Modal wiring (robust) ===== */
+    /* ===== Info Modal wiring ===== */
     const openInfoBtn = document.getElementById('openInfoBtn');
     const backdrop = document.getElementById('modalBackdrop');
     const modal = document.getElementById('infoModal');
@@ -798,34 +784,23 @@
       modal.classList.add('open');
       modal.setAttribute('aria-hidden','false');
       backdrop.setAttribute('aria-hidden','false');
-      document.body.style.overflow = 'hidden'; // prevent background scroll
+      document.body.style.overflow = 'hidden';
     }
     function closeModal(){
       backdrop.classList.remove('open');
       modal.classList.remove('open');
       modal.setAttribute('aria-hidden','true');
       backdrop.setAttribute('aria-hidden','true');
-      document.body.style.overflow = ''; // restore scroll
+      document.body.style.overflow = '';
     }
-
     if (openInfoBtn) openInfoBtn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); openModal(); });
-
-    // Close via dedicated button
-    if (modalClose) modalClose.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeModal(); });
-
-    // Close by clicking backdrop
-    if (backdrop) backdrop.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeModal(); });
-
-    // Swallow clicks inside the card so they don't hit the map
-    if (modalCard) modalCard.addEventListener('click', (e)=>{ e.stopPropagation(); });
-
-    // Prevent modal container from forwarding clicks to the map
-    if (modal) modal.addEventListener('click', (e)=>{ e.stopPropagation(); });
-
-    // Esc to close
+    if (modalClose)  modalClose .addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeModal(); });
+    if (backdrop)    backdrop   .addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeModal(); });
+    if (modalCard)   modalCard  .addEventListener('click', (e)=>{ e.stopPropagation(); });
+    if (modal)       modal      .addEventListener('click', (e)=>{ e.stopPropagation(); });
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal.classList.contains('open')) closeModal(); });
 
-    // Kick off
+    /* ===== Start ===== */
     window.addEventListener('load', bootstrap);
   </script>
 </body>
