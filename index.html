@@ -19,9 +19,7 @@
   label{font-weight:600}
   .hint{color:var(--muted);font-size:12px}
   /* Remove the focus rectangle that appears on clicked polygons/catchments */
-.leaflet-interactive:focus {
-  outline: none !important;
-}
+.leaflet-interactive:focus { outline: none !important; }
 
   /* Left panel */
   #leftPanel{
@@ -219,7 +217,8 @@
 
     /* ===== Styles ===== */
     const BLUE='#4ea1ff';
-    const STYLE_POLY = {color:'#0b3d91',weight:1,opacity:.9,fillColor:'var(--poly)',fillOpacity:.50};
+    /* slight bump so storages pop over catchments/basemap */
+    const STYLE_POLY = {color:'#0b3d91',weight:1,opacity:.9,fillColor:'var(--poly)',fillOpacity:.65};
     const PALETTE=['#6b7280','#a3a3a3','#94a3b8','#9ca3af','#737373','#64748b','#475569','#374151','#4b5563','#1f2937'];
     const CATCHMENT_OVERRIDES={
       'Barwon-Darling':'#e377c2','Border Rivers':'#ff7f0e',
@@ -232,6 +231,7 @@
       let h=0; for(let i=0;i<key.length;i++) h=(h*31+key.charCodeAt(i))>>>0;
       return PALETTE[h%PALETTE.length];
     }
+    /* base (non-time-shaded) catchments */
     const catchmentBaseStyle=(f)=>{ const p=f?.properties||{}; const n=getCatchmentName(p); const c=catchmentColor(n); return {color:c,weight:2,opacity:.9,fillColor:c,fillOpacity:.16}; };
 
     /* ===== Data stores ===== */
@@ -275,87 +275,82 @@
     const bpClose=document.getElementById('bpClose'); bpClose.addEventListener('click',()=>{ bottomPanel.classList.remove('open'); bottomPanel.setAttribute('aria-hidden','true'); });
     const ctx=document.getElementById('chart').getContext('2d'); let chart=null;
     function drawLine(points, yLabel, title, color){
-  const c = color || BLUE;
-  if(chart) chart.destroy();
-  chart = new Chart(ctx,{
-    type:'line',
-    data:{ datasets:[{
-      data:points, parsing:false,
-      borderColor: c, backgroundColor:'transparent',
-      borderWidth:2, tension:0, spanGaps:false,
-      pointRadius:2, pointBackgroundColor:c, pointBorderWidth:0
-    }]},
-    options:{
-      animation:false, maintainAspectRatio:false, parsing:false,
-      scales:{
-        x:{ type:'time', time:{unit:'month'}, ticks:{color:'#dfe6f5'}, grid:{color:'rgba(255,255,255,0.22)'} },
-        y:{ min:0, ticks:{color:'#dfe6f5'}, grid:{color:'rgba(255,255,255,0.22)'}, title:{display:true,text:yLabel,color:'#e5e7eb'} }
-      },
-      plugins:{ legend:{display:false}, title:{display:true,text:title,color:'#fff',align:'center',font:{weight:'600',size:16}} }
+      const c = color || BLUE;
+      if(chart) chart.destroy();
+      chart = new Chart(ctx,{
+        type:'line',
+        data:{ datasets:[{
+          data:points, parsing:false,
+          borderColor: c, backgroundColor:'transparent',
+          borderWidth:2, tension:0, spanGaps:false,
+          pointRadius:2, pointBackgroundColor:c, pointBorderWidth:0
+        }]},
+        options:{
+          animation:false, maintainAspectRatio:false, parsing:false,
+          scales:{
+            x:{ type:'time', time:{unit:'month'}, ticks:{color:'#dfe6f5'}, grid:{color:'rgba(255,255,255,0.22)'} },
+            y:{ min:0, ticks:{color:'#dfe6f5'}, grid:{color:'rgba(255,255,255,0.22)'}, title:{display:true,text:yLabel,color:'#e5e7eb'} }
+          },
+          plugins:{ legend:{display:false}, title:{display:true,text:title,color:'#fff',align:'center',font:{weight:'600',size:16}} }
+        }
+      });
     }
-  });
-}
 
     let lastSelected=null;
 
     function metricLabel(m){ return m==='wsa' ? 'WSA' : (m==='depth' ? 'Depth' : 'Volume'); }
     function yAxisUnits(m){ return m==='wsa' ? 'WSA (ha)' : (m==='depth' ? 'Depth (m)' : 'Volume (ML)'); }
 
-    
-function openPanel(sel){
-  if(sel.type==='polygon'){
-    const bucket = seriesByGEEID.get(sel.id);
-    const key = (currentMetric==='wsa' ? 'wsa' : (currentMetric==='depth' ? 'depth' : 'vol'));
-    let pts = [];
-    if (bucket) {
-      pts = bucket.rows
-        .filter(r => Number.isFinite(r[key]))
-        .map(r => ({ x: r.t.getTime(), y: r[key] }));
+    function openPanel(sel){
+      if(sel.type==='polygon'){
+        const bucket = seriesByGEEID.get(sel.id);
+        const key = (currentMetric==='wsa' ? 'wsa' : (currentMetric==='depth' ? 'depth' : 'vol'));
+        let pts = [];
+        if (bucket) {
+          pts = bucket.rows
+            .filter(r => Number.isFinite(r[key]))
+            .map(r => ({ x: r.t.getTime(), y: r[key] }));
+        }
+        const catchName = bucket?.catchment ? ` (${bucket.catchment})` : '';
+        const idPad = idFive(sel.id);
+        const title = `Storage ID ${idPad}${catchName} ${metricLabel(currentMetric)} Timeseries`;
+
+        bpTitleText.textContent = title;
+        const t0 = pts[0]?.x, t1 = pts[pts.length-1]?.x;
+        bpInfo.textContent = pts.length
+          ? ` — ${pts.length} obs${t0&&t1?`, ${new Date(t0).toISOString().slice(0,10)} → ${new Date(t1).toISOString().slice(0,10)}`:''}`
+          : ' — no CSV rows.';
+
+        // Storage charts stay BLUE (default in drawLine)
+        drawLine(pts, yAxisUnits(currentMetric), title);
+
+        if (bpTop) bpTop.style.borderBottom = '1px solid var(--border)';
+
+      } else if (sel.type==='catchment'){
+        // Depth aggregation unsupported → fall back to WSA
+        let key = currentMetric;
+        if (key==='depth') key='wsa';
+
+        const agg = catchAgg.get(sel.cname);
+        const pts = (key==='wsa') ? (agg?.wsa || []) : (agg?.vol || []);
+        const title = `${sel.cname} Aggregated ${metricLabel(key)} Timeseries`;
+
+        bpTitleText.textContent = title;
+        const t0 = pts[0]?.x, t1 = pts[pts.length-1]?.x;
+        bpInfo.textContent = pts.length
+          ? ` — ${pts.length} obs${t0&&t1?`, ${new Date(t0).toISOString().slice(0,10)} → ${new Date(t1).toISOString().slice(0,10)}`:''}`
+          : ' — no CSV rows.';
+
+        // Match the catchment outline colour
+        const lineColor = catchmentColor(sel.cname);
+        drawLine(pts, yAxisUnits(key), title, lineColor);
+
+        if (bpTop) bpTop.style.borderBottom = `2px solid ${lineColor}`;
+      }
+
+      bottomPanel.classList.add('open');
+      bottomPanel.setAttribute('aria-hidden','false');
     }
-    const catchName = bucket?.catchment ? ` (${bucket.catchment})` : '';
-    const idPad = idFive(sel.id);
-    const title = `Storage ID ${idPad}${catchName} ${metricLabel(currentMetric)} Timeseries`;
-
-    bpTitleText.textContent = title;
-    const t0 = pts[0]?.x, t1 = pts[pts.length-1]?.x;
-    bpInfo.textContent = pts.length
-      ? ` — ${pts.length} obs${t0&&t1?`, ${new Date(t0).toISOString().slice(0,10)} → ${new Date(t1).toISOString().slice(0,10)}`:''}`
-      : ' — no CSV rows.';
-
-    // Storage charts stay BLUE (default in drawLine)
-    drawLine(pts, yAxisUnits(currentMetric), title);
-
-    // optional: neutral accent for storage
-    if (bpTop) bpTop.style.borderBottom = '1px solid var(--border)';
-
-  } else if (sel.type==='catchment'){
-    // Depth aggregation unsupported → fall back to WSA
-    let key = currentMetric;
-    if (key==='depth') key='wsa';
-
-    const agg = catchAgg.get(sel.cname);
-    const pts = (key==='wsa') ? (agg?.wsa || []) : (agg?.vol || []);
-    const title = `${sel.cname} Aggregated ${metricLabel(key)} Timeseries`;
-
-    bpTitleText.textContent = title;
-    const t0 = pts[0]?.x, t1 = pts[pts.length-1]?.x;
-    bpInfo.textContent = pts.length
-      ? ` — ${pts.length} obs${t0&&t1?`, ${new Date(t0).toISOString().slice(0,10)} → ${new Date(t1).toISOString().slice(0,10)}`:''}`
-      : ' — no CSV rows.';
-
-    // Match the catchment outline colour
-    const lineColor = catchmentColor(sel.cname);
-    drawLine(pts, yAxisUnits(key), title, lineColor);
-
-    // optional: matching accent under header
-    if (bpTop) bpTop.style.borderBottom = `2px solid ${lineColor}`;
-  }
-
-  bottomPanel.classList.add('open');
-  bottomPanel.setAttribute('aria-hidden','false');
-}
-
-
 
     /* ===== CSV ingest + observed catchment aggregation ===== */
     function addCatchAgg(cname, tms, wsa, vol){
@@ -536,8 +531,17 @@ function openPanel(sel){
     }
 
     /* ===== Choropleth (Percent Fullness) ===== */
-    // Single-hue ramp (light → navy) used for both polygons & catchments
-    const pctRamp=['#e6f0ff','#c7ddff','#a2c4ff','#7da9ff','#5b8fff','#3b73e6','#1d57c9','#003b8f'];
+    // NEW: softened ramp, no navy; darkest is a strong blue
+    const pctRamp=[
+      '#E8F1FF', // very light
+      '#C7DDFF',
+      '#9EC3FF',
+      '#75A7FF',
+      '#4F8FFF',
+      '#2F76F1',
+      '#1C63E3', // dark (not navy)
+      '#1552BE'  // slightly darker, still not navy
+    ];
     function rampColor(p){ if(!Number.isFinite(p)) return '#b8c2cc'; const idx = Math.max(0, Math.min(pctRamp.length-1, Math.round(p*(pctRamp.length-1)))); return pctRamp[idx]; }
     function polyOpacity(p){ if(!Number.isFinite(p)) return 0.15; return 0.15 + 0.65 * Math.max(0, Math.min(1, p)); }
 
@@ -565,8 +569,10 @@ function openPanel(sel){
           const perc = catchPct[fi]?.[cname]?.[cKey];
           const col = rampColor(perc);
           const base=catchmentColor(cname);
+          // increased opacity so map shading more closely matches legend,
+          // yet still slightly transparent so storages remain visually distinct
           const style=toggleCatchChoro.checked
-            ? {fillColor:col,fillOpacity:0.75,color:base,weight:2,opacity:0.95}
+            ? {fillColor:col,fillOpacity:0.85,color:base,weight:2,opacity:0.95}
             : {color:base,weight:2,opacity:.9,fillColor:base,fillOpacity:.12};
           lyr.setStyle(style);
         });
