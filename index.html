@@ -89,7 +89,7 @@
   }
   .modal.open{ display:flex; }
 
-  /* 🔹 Redesigned modal card (dark gradient, animated) */
+  /* Modal card */
   .modal-card{
     background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
     color:#e2e8f0;
@@ -103,17 +103,14 @@
   }
   .modal.open .modal-card { animation: fadeInUp .4s ease forwards; }
   @keyframes fadeInUp { from{transform:translateY(40px);opacity:0;} to{transform:translateY(0);opacity:1;} }
-
   .modal-card h2 {
-  margin: 0 0 16px 0;
-  font-size: 28px;         /* bigger title */
-  font-weight: 700;        /* stronger weight */
-  background: linear-gradient(90deg, #60a5fa, #a78bfa);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-  
+    margin: 0 0 16px 0;
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(90deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
   .modal-card h3{
     margin:16px 0 10px 0; font-size:16px; color:#f8fafc;
     border-left:3px solid #60a5fa; padding-left:8px;
@@ -150,7 +147,6 @@
           <label><input type="radio" name="metric" value="depth"/> Depth (m)</label>
           <label><input type="radio" name="metric" value="vol"/> Volume (ML)</label>
         </div>
-        <!-- (Removed the explanatory text line as requested) -->
       </div>
 
       <div class="group">
@@ -171,7 +167,10 @@
             <button id="btnNext" class="btn">▶</button>
           </div>
           <label style="margin-top:6px"><input type="checkbox" id="toggleCatchChoro" checked/> Enable catchment shading</label>
-          <div class="small">Monthly frames (linear interpolation). Catchments: WSA & Volume aggregated.</div>
+          <div class="small">
+            Storages: linearly interpolated between satellite observations.<br>
+            Catchments: WSA &amp; Volume aggregated.
+          </div>
         </div>
         <div class="row" style="margin-top:10px">
           <h3 style="margin-top:6px">Chart time window</h3>
@@ -241,7 +240,7 @@
       catchments: 'data/catchments.geojson',
       csv: 'data/final_export.csv'
     };
-    const CACHE_BUST = '?v=2025-10-16c';
+    const CACHE_BUST = '?v=2025-10-19a';
 
     /* ===== Helpers ===== */
     function safeBlock(el){ try{ if(el){ L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);} }catch{} }
@@ -315,7 +314,7 @@
 
     /* ===== Styles & color ramps ===== */
     const BLUE='#4ea1ff';
-    const STYLE_POLY = {color:'#0b3d91',weight:1,opacity:.9,fillColor:'var(--poly)',fillOpacity:1.0}; /* storages opaque */
+    const STYLE_POLY = {color:'#0b3d91',weight:1,opacity:.9,fillColor:'var(--poly)',fillOpacity:1.0};
     const PALETTE=['#6b7280','#a3a3a3','#94a3b8','#9ca3af','#737373','#64748b','#475569','#374151','#4b5563','#1f2937'];
     const CATCHMENT_OVERRIDES={
       'Barwon-Darling':'#e377c2','Border Rivers':'#ff7f0e',
@@ -330,9 +329,8 @@
     }
     const catchmentBaseStyle=(f)=>{ const p=f?.properties||{}; const n=getCatchmentName(p); const c=catchmentBaseColor(n); return {color:c,weight:2,opacity:.9,fillColor:c,fillOpacity:.16}; };
 
-    // Storage legend ramp: near-white to dark (not navy) blue
+    // Storage legend ramp
     const baseRamp = ['#F7FAFF','#E6F0FF','#C9DEFF','#A7C8FF','#86B2FF','#5F95FF','#3B78F0','#1C63E3'];
-    // Catchment ramp: slightly darker to compensate for 0.75 alpha
     function darkenHex(hex, f){
       const h = hex.replace('#','');
       const n = h.length === 3 ? h.split('').map(c=>c+c).join('') : h;
@@ -388,7 +386,39 @@
     bpClose.addEventListener('click',()=>{ bottomPanel.classList.remove('open'); bottomPanel.setAttribute('aria-hidden','true'); });
 
     const ctx=document.getElementById('chart').getContext('2d'); let chart=null;
-    function drawLine(points, yLabel, title, color){
+
+    // ---- Chart zoom state ----
+    let zoomRange = { start: null, end: null }; // Date | null
+
+    function parseMonthInput(v) {
+      if (!v) return null;
+      const [y, m] = String(v).split('-').map(Number);
+      if (!y || !m) return null;
+      return new Date(Date.UTC(y, m - 1, 1));
+    }
+    function applyZoomToChart() {
+      if (!chart) return;
+      const xmin = zoomRange.start ? zoomRange.start.getTime() : undefined;
+      const xmax = zoomRange.end ? zoomRange.end.getTime() : undefined;
+      chart.options.scales.x.min = xmin;
+      chart.options.scales.x.max = xmax;
+      chart.update();
+    }
+    function resetZoom() {
+      zoomRange = { start: null, end: null };
+      if (!chart) return;
+      chart.options.scales.x.min = undefined;
+      chart.options.scales.x.max = undefined;
+      chart.update();
+    }
+    function currentXMinMax() {
+      return {
+        min: zoomRange.start ? zoomRange.start.getTime() : undefined,
+        max: zoomRange.end ? zoomRange.end.getTime() : undefined
+      };
+    }
+
+    function drawLine(points, yLabel, title, color, xMinMax) {
       const c = color || BLUE;
       if(chart) chart.destroy();
       chart = new Chart(ctx,{
@@ -402,7 +432,8 @@
         options:{
           animation:false, maintainAspectRatio:false, parsing:false,
           scales:{
-            x:{ type:'time', time:{unit:'month'}, ticks:{color:'#dfe6f5'}, grid:{color:'rgba(255,255,255,0.22)'} },
+            x:{ type:'time', time:{unit:'month'}, ticks:{color:'#dfe6f5'}, grid:{color:'rgba(255,255,255,0.22)'},
+                min:xMinMax?.min, max:xMinMax?.max },
             y:{ min:0, ticks:{color:'#dfe6f5'}, grid:{color:'rgba(255,255,255,0.22)'}, title:{display:true,text:yLabel,color:'#e5e7eb'} }
           },
           plugins:{ legend:{display:false}, title:{display:true,text:title,color:'#fff',align:'center',font:{weight:'600',size:16}} }
@@ -410,50 +441,34 @@
       });
     }
 
+    const zoomStartEl = document.getElementById('zoomStart');
+    const zoomEndEl   = document.getElementById('zoomEnd');
+    const btnZoomApply = document.getElementById('btnZoomApply');
+    const btnZoomReset = document.getElementById('btnZoomReset');
+
+    btnZoomApply.addEventListener('click', () => {
+      const s = parseMonthInput(zoomStartEl.value);
+      const e = parseMonthInput(zoomEndEl.value);
+      if (!s && !e) { resetZoom(); return; }
+      let start = s, end = e;
+      if (start && !end) end = start;
+      if (!start && end) start = end;
+      if (start && end && start > end) [start, end] = [end, start];
+      zoomRange = { start, end };
+      applyZoomToChart();
+    });
+
+    btnZoomReset.addEventListener('click', () => {
+      zoomStartEl.value = '';
+      zoomEndEl.value = '';
+      resetZoom();
+    });
+
     let lastSelected=null;
     function metricLabel(m){ return m==='wsa' ? 'WSA' : (m==='depth' ? 'Depth' : 'Volume'); }
     function yAxisUnits(m){ return m==='wsa' ? 'WSA (ha)' : (m==='depth' ? 'Depth (m)' : 'Volume (ML)'); }
 
-    function openPanel(sel){
-      if(sel.type==='polygon'){
-        const bucket = seriesByGEEID.get(sel.id);
-        const key = (currentMetric==='wsa' ? 'wsa' : (currentMetric==='depth' ? 'depth' : 'vol'));
-        const pts = (bucket?.rows||[]).filter(r => Number.isFinite(r[key])).map(r => ({ x: r.t.getTime(), y: r[key] }));
-        const catchName = bucket?.catchment ? ` (${bucket.catchment})` : '';
-        const idPad = idFive(sel.id);
-        const title = `Storage ID ${idPad}${catchName} ${metricLabel(currentMetric)} Timeseries`;
-
-        bpTitleText.textContent = title;
-        const t0 = pts[0]?.x, t1 = pts[pts.length-1]?.x;
-        bpInfo.textContent = pts.length
-          ? ` — ${pts.length} obs${t0&&t1?`, ${new Date(t0).toISOString().slice(0,10)} → ${new Date(t1).toISOString().slice(0,10)}`:''}`
-          : ' — no CSV rows.';
-
-        drawLine(pts, yAxisUnits(currentMetric), title);
-        if (bpTop) bpTop.style.borderBottom = '1px solid var(--border)';
-
-      } else if (sel.type==='catchment'){
-        let key = currentMetric; if (key==='depth') key='wsa';
-        const agg = catchAgg.get(sel.cname);
-        const pts = (key==='wsa') ? (agg?.wsa || []) : (agg?.vol || []);
-        const title = `${sel.cname} Aggregated ${metricLabel(key)} Timeseries`;
-
-        bpTitleText.textContent = title;
-        const t0 = pts[0]?.x, t1 = pts[pts.length-1]?.x;
-        bpInfo.textContent = pts.length
-          ? ` — ${pts.length} obs${t0&&t1?`, ${new Date(t0).toISOString().slice(0,10)} → ${new Date(t1).toISOString().slice(0,10)}`:''}`
-          : ' — no CSV rows.';
-
-        const lineColor = catchmentBaseColor(sel.cname);
-        drawLine(pts, yAxisUnits(key), title, lineColor);
-        if (bpTop) bpTop.style.borderBottom = `2px solid ${lineColor}`;
-      }
-
-      bottomPanel.classList.add('open');
-      bottomPanel.setAttribute('aria-hidden','false');
-    }
-
-    /* ===== Aggregation ===== */
+    /* ===== Aggregation (sum over frames) ===== */
     function addCatchAgg(cname, tms, wsa, vol){
       if(!catchAgg.has(cname)) catchAgg.set(cname, {raw:new Map(), wsa:[], vol:[]});
       const bucket=catchAgg.get(cname);
@@ -487,7 +502,7 @@
       // Build catchment membership set
       if(catchName){
         if(!catchmentToIDs.has(catchName)) catchmentToIDs.set(catchName,new Set());
-        catchmentToIDs.get(catchName).add(id);
+        if(id) catchmentToIDs.get(catchName).add(id);
       }
     }
 
@@ -515,7 +530,7 @@
       }
     }
 
-    /* ===== Frames + interpolation ===== */
+    /* ===== Frames + interpolation for MAP (monthly) ===== */
     function interpAt(rows, tms){
       if(!rows||rows.length===0) return null;
       const n=rows.length, t0=rows[0].t.getTime(), t1=rows[n-1].t.getTime();
@@ -546,7 +561,7 @@
       timeSlider.min=0; timeSlider.max=Math.max(0,frameTicks.length-1); timeSlider.value=0;
       frameLabel.textContent = 'Frame: ' + frameTicks[0].toISOString().slice(0,10);
 
-      // Storage interpolation
+      // Storage interpolation per monthly frame (for MAP coloring)
       polyInterp={};
       for(let fi=0; fi<frameTicks.length; fi++){
         const ft=frameTicks[fi].getTime(); polyInterp[fi]={};
@@ -556,7 +571,7 @@
         }
       }
 
-      // Catchment sums per frame
+      // Catchment sums per monthly frame (for MAP)
       const allCatchments=[...catchmentToIDs.keys()];
       catchInterp={};
       for(let fi=0; fi<frameTicks.length; fi++){
@@ -602,7 +617,7 @@
         catchPct[fi]=dict;
       }
 
-      // Build chart series from frames (for catchments)
+      // Build chart series from frames (legacy monthly catchAgg — still used nowhere after on-demand daily, but harmless)
       catchAgg.clear();
       for(const cname of Object.keys(catchInterp[0]||{})){
         const wsaSeries=[], volSeries=[];
@@ -726,12 +741,7 @@
         onEachFeature:(feature,lyr)=>{
           const cname=getCatchmentName(feature.properties||{});
           lyr._cname = cname;
-
-          // 🟦 Restore hover tooltip with name
-          lyr.bindTooltip(cname, {
-            sticky:true, direction:'top', offset:[0,-4], className:'catch-tooltip'
-          });
-
+          lyr.bindTooltip(cname, { sticky:true, direction:'top', offset:[0,-4], className:'catch-tooltip' });
           lyr.on('click',()=>{ lastSelected={type:'catchment', cname:lyr._cname}; openPanel(lastSelected); });
         }
       }).addTo(groups.catchments);
@@ -752,7 +762,9 @@
     function finalizeCSV(){
       // Sort rows and compute caps
       for(const [,obj] of seriesByGEEID.entries()){
-        obj.rows=obj.rows.filter(r=>r.t instanceof Date && !isNaN(r.t)).sort((a,b)=>a.t-b.t);
+        obj.rows=obj.rows
+          .filter(r=>r.t instanceof Date && !isNaN(r.t))
+          .sort((a,b)=>a.t-b.t);
       }
       finalizeCatchAgg();
       computeCapacities();
@@ -760,31 +772,124 @@
       detailEl.textContent=`Loaded ✓ (${seriesByGEEID.size.toLocaleString()} storages)`;
     }
 
-    async function bootstrap(){
-      try{
-        const {polys, cats, rows} = await fetchAll();
-        loadPolygons(polys);
-        loadCatchments(cats);
-
-        seriesByGEEID.clear(); catchAgg.clear(); frameTicks=[]; polyInterp={}; catchInterp={}; polyPct={}; catchPct={}; capsByID.clear(); capsByCatch.clear();
-        rows.forEach(handleCSVRow);
-        finalizeCSV();
-
-        try{ const b=L.featureGroup([groups.polygons,groups.catchments]).getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{}
-
-        // Build legend now that DOM exists
-        updateLegend();
-
-        // Auto-open the information modal on load
-        openModal();
-
-      }catch(e){
-        console.error(e);
-        detailEl.textContent='Error loading data: '+ e.message + ' — check file names/paths and GitHub Pages case-sensitivity.';
+    /* ===== Interp helpers for catchment on-demand series ===== */
+    function interpMetricAt(rows, tms, metric) {
+      if (!rows || !rows.length) return NaN;
+      const n = rows.length;
+      const t0 = rows[0].t.getTime(), t1 = rows[n-1].t.getTime();
+      if (tms <= t0) { const v = rows[0][metric]; return Number.isFinite(v) ? v : NaN; }
+      if (tms >= t1) { const v = rows[n-1][metric]; return Number.isFinite(v) ? v : NaN; }
+      let lo = 0, hi = n - 1;
+      while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1;
+        const tm = rows[mid].t.getTime();
+        if (tm === tms) { const v = rows[mid][metric]; return Number.isFinite(v) ? v : NaN; }
+        if (tm < tms) lo = mid; else hi = mid;
       }
+      const a = rows[lo], b = rows[hi];
+      const ta = a.t.getTime(), tb = b.t.getTime();
+      const w = (tms - ta) / (tb - ta);
+      const va = a[metric], vb = b[metric];
+      if (!Number.isFinite(va) && !Number.isFinite(vb)) return NaN;
+      if (!Number.isFinite(va)) return Number.isFinite(vb) ? vb : NaN;
+      if (!Number.isFinite(vb)) return Number.isFinite(va) ? va : NaN;
+      return va + w * (vb - va);
     }
 
-    /* ===== Slider + play (no duplicate consts) ===== */
+    function buildCatchmentSeriesInterpolated(cname, metric, start, end) {
+      const setIDs = catchmentToIDs.get(cname) || new Set();
+      if (!setIDs.size) return [];
+
+      // Determine overall domain from members
+      let globalMin = Infinity, globalMax = -Infinity;
+      for (const id of setIDs) {
+        const bucket = seriesByGEEID.get(id);
+        if (!bucket || !bucket.rows.length) continue;
+        const rows = bucket.rows;
+        globalMin = Math.min(globalMin, rows[0].t.getTime());
+        globalMax = Math.max(globalMax, rows[rows.length - 1].t.getTime());
+      }
+      if (!Number.isFinite(globalMin) || !Number.isFinite(globalMax)) return [];
+
+      let tStart = start ? Math.max(start.getTime(), globalMin) : globalMin;
+      let tEnd   = end   ? Math.min(end.getTime(),   globalMax) : globalMax;
+      if (tEnd < tStart) [tStart, tEnd] = [tEnd, tStart];
+
+      // Adaptive daily grid, thinned to ~600 points max
+      const DAY = 24*3600*1000;
+      const spanDays = Math.max(1, Math.round((tEnd - tStart) / DAY));
+      const maxPts = 600;
+      const stepDays = Math.max(1, Math.ceil(spanDays / maxPts));
+      const stepMs = stepDays * DAY;
+
+      const timestamps = [];
+      for (let t = tStart; t <= tEnd + 1; t += stepMs) timestamps.push(t);
+
+      // Pre-extract member rows
+      const memberRows = [];
+      for (const id of setIDs) {
+        const bucket = seriesByGEEID.get(id);
+        if (!bucket || !bucket.rows.length) continue;
+        memberRows.push(bucket.rows);
+      }
+      if (!memberRows.length) return [];
+
+      // Aggregate
+      const out = [];
+      for (const tms of timestamps) {
+        let sum = 0;
+        let has = false;
+        for (const rows of memberRows) {
+          const v = interpMetricAt(rows, tms, metric);
+          if (Number.isFinite(v)) { sum += v; has = true; }
+        }
+        if (has) out.push({ x: tms, y: sum });
+      }
+      return out;
+    }
+
+    /* ===== Panel open (now respects true obs for storages + daily agg for catchments) ===== */
+    function openPanel(sel){
+      if(sel.type==='polygon'){
+        const bucket = seriesByGEEID.get(sel.id);
+        const key = (currentMetric==='wsa' ? 'wsa' : (currentMetric==='depth' ? 'depth' : 'vol'));
+        const ptsRaw = (bucket?.rows || []).filter(r => Number.isFinite(r[key])).map(r => ({ x: r.t.getTime(), y: r[key] }));
+
+        const catchName = bucket?.catchment ? ` (${bucket.catchment})` : '';
+        const idPad = idFive(sel.id);
+        const title = `Storage ID ${idPad}${catchName} ${metricLabel(currentMetric)} Timeseries`;
+
+        bpTitleText.textContent = title;
+        const t0 = ptsRaw[0]?.x, t1 = ptsRaw[ptsRaw.length-1]?.x;
+        bpInfo.textContent = ptsRaw.length
+          ? ` — ${ptsRaw.length} obs${t0&&t1?`, ${new Date(t0).toISOString().slice(0,10)} → ${new Date(t1).toISOString().slice(0,10)}`:''}`
+          : ' — no CSV rows.';
+
+        drawLine(ptsRaw, yAxisUnits(currentMetric), title, undefined, currentXMinMax());
+        if (bpTop) bpTop.style.borderBottom = '1px solid var(--border)';
+
+      } else if (sel.type==='catchment'){
+        // Depth not aggregated; if currentMetric is depth, display WSA aggregate
+        let key = currentMetric; if (key==='depth') key='wsa';
+        const series = buildCatchmentSeriesInterpolated(sel.cname, key, zoomRange.start, zoomRange.end);
+        const title = `${sel.cname} Aggregated ${metricLabel(key)} Timeseries`;
+
+        bpTitleText.textContent = title;
+        const t0 = series[0]?.x, t1 = series[series.length-1]?.x;
+        bpInfo.textContent = series.length
+          ? ` — ${series.length} pts${t0&&t1?`, ${new Date(t0).toISOString().slice(0,10)} → ${new Date(t1).toISOString().slice(0,10)}`:''}`
+          : ' — no data in selected window.';
+
+        const lineColor = catchmentBaseColor(sel.cname);
+        drawLine(series, yAxisUnits(key), title, lineColor, currentXMinMax());
+        if (bpTop) bpTop.style.borderBottom = `2px solid ${lineColor}`;
+      }
+
+      bottomPanel.classList.add('open');
+      bottomPanel.setAttribute('aria-hidden','false');
+    }
+
+    /* ===== Slider + play ===== */
     let playing=false, timer=null;
     timeSlider.addEventListener('input',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
     btnPrev.addEventListener('click',()=>{ if(!toggleTime.checked) return; const i=Math.max(0,+timeSlider.value-1); timeSlider.value=i; recolorForFrame(i); });
@@ -828,9 +933,32 @@
     if (backdrop)    backdrop   .addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeModal(); });
     if (modalCard)   modalCard  .addEventListener('click', (e)=>{ e.stopPropagation(); });
     if (modal)       modal      .addEventListener('click', (e)=>{ e.stopPropagation(); });
-    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal.classList.contains('open')) closeModal(); });
 
     /* ===== Start ===== */
+    async function bootstrap(){
+      try{
+        const {polys, cats, rows} = await fetchAll();
+        loadPolygons(polys);
+        loadCatchments(cats);
+
+        seriesByGEEID.clear(); catchAgg.clear(); frameTicks=[]; polyInterp={}; catchInterp={}; polyPct={}; catchPct={}; capsByID.clear(); capsByCatch.clear();
+        rows.forEach(handleCSVRow);
+        finalizeCSV();
+
+        try{ const b=L.featureGroup([groups.polygons,groups.catchments]).getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{}
+
+        // Build legend now that DOM exists
+        updateLegend();
+
+        // Auto-open the information modal on load
+        openModal();
+
+      }catch(e){
+        console.error(e);
+        detailEl.textContent='Error loading data: '+ e.message + ' — check file names/paths and GitHub Pages case-sensitivity.';
+      }
+    }
+
     window.addEventListener('load', bootstrap);
   </script>
 </body>
