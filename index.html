@@ -12,7 +12,6 @@
   }
   html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px system-ui,Arial,sans-serif}
   #wrap{height:100%;display:grid;grid-template-rows:1fr}
-  /* Desktop map keeps the sidebar space — UNCHANGED */
   #map{height:100vh;margin-left:var(--sidebar)}
   .btn{padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:#0f172a;color:var(--text);cursor:pointer}
   .btn:disabled{opacity:.5;cursor:not-allowed}
@@ -20,11 +19,11 @@
   .hint{color:var(--muted);font-size:12px}
   .leaflet-interactive:focus { outline: none !important; }
 
-  /* Left panel (desktop UNCHANGED) */
+  /* Left panel (scrollable) */
   #leftPanel{
     position:fixed;top:0;left:0;bottom:0;width:var(--sidebar);background:var(--panel);
     border-right:1px solid var(--border);z-index:1002;padding:12px;display:grid;grid-auto-rows:min-content;gap:12px;
-    overflow-y:auto; overscroll-behavior:contain; will-change:transform;
+    overflow-y:auto; overscroll-behavior:contain;
   }
   #leftPanel h3{margin:0 0 6px 0;font-size:13px;color:var(--muted);letter-spacing:.02em}
   .group{padding:10px;border:1px solid var(--border);border-radius:10px;background:#0f172a}
@@ -38,7 +37,7 @@
   input[type="month"]::-webkit-calendar-picker-indicator{ filter: invert(1) brightness(1.2); opacity: 1; }
   input[type="month"]::-webkit-datetime-edit, input[type="month"]{ color: var(--text); }
 
-  /* Bottom chart (desktop default UNCHANGED) */
+  /* Bottom chart */
   #bottomPanel{
     position:fixed;left:var(--sidebar);right:0;bottom:0;background:#0f172a;
     border-top:1px solid var(--border);transform:translateY(100%);transition:transform .25s ease;
@@ -78,81 +77,58 @@
     box-shadow: 0 2px 6px rgba(0,0,0,0.4);
   }
 
-  /* Modal backdrop & card */
-  .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; z-index:3000; }
+  /* Modal backdrop */
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; z-index:3000;
+  }
   .modal-backdrop.open{ display:block; }
-  .modal{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:3001; padding:20px; }
+
+  /* Modal container */
+  .modal{
+    position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:3001; padding:20px;
+  }
   .modal.open{ display:flex; }
+
+  /* Modal card */
   .modal-card{
     background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
-    color:#e2e8f0; border-radius:14px; box-shadow:0 30px 80px rgba(0,0,0,0.5);
-    width:min(900px, 92vw); max-height:85vh; overflow:auto; padding:24px 28px 20px 28px;
+    color:#e2e8f0;
+    border-radius:14px;
+    box-shadow:0 30px 80px rgba(0,0,0,0.5);
+    width:min(900px, 92vw);
+    max-height:85vh;
+    overflow:auto;
+    padding:24px 28px 20px 28px;
     border:1px solid rgba(255,255,255,0.1);
   }
   .modal.open .modal-card { animation: fadeInUp .4s ease forwards; }
   @keyframes fadeInUp { from{transform:translateY(40px);opacity:0;} to{transform:translateY(0);opacity:1;} }
   .modal-card h2 {
-    margin: 0 0 16px 0; font-size: 28px; font-weight: 700;
+    margin: 0 0 16px 0;
+    font-size: 28px;
+    font-weight: 700;
     background: linear-gradient(90deg, #60a5fa, #a78bfa);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
-  .modal-card h3{ margin:16px 0 10px 0; font-size:16px; color:#f8fafc; border-left:3px solid #60a5fa; padding-left:8px; }
+  .modal-card h3{
+    margin:16px 0 10px 0; font-size:16px; color:#f8fafc;
+    border-left:3px solid #60a5fa; padding-left:8px;
+  }
   .modal-card p{ margin:0 0 12px 0; line-height:1.6; }
   .modal-card ul{ margin:8px 0 12px 18px; }
   .modal-card li{ margin:6px 0; }
   .modal-actions{ display:flex; justify-content:flex-end; margin-top:14px; }
-  .modal-close{ padding:6px 10px; border-radius:8px; border:1px solid #334155; background:#1e293b; color:#f1f5f9; cursor:pointer; }
-  .modal-close:hover{ background:#334155; }
-  .leaflet-control.custom-info-control{ margin-bottom:8px; }
-
-  /* ─────────────────────────────────────────────────────────────
-     MOBILE-ONLY CHANGES (≤ 800px). Desktop remains untouched.
-     ───────────────────────────────────────────────────────────── */
-  @media (max-width: 800px){
-    /* Show a hamburger button on mobile only */
-    #topBar{ position:fixed; left:10px; top:10px; z-index:1100; display:block; }
-    #menuBtn{
-      padding:8px 10px; border-radius:10px; border:1px solid var(--border);
-      background:#0f172a; color:var(--text); display:flex; align-items:center; gap:8px;
-    }
-    #menuBtn .bars{ width:18px; height:12px; position:relative; display:inline-block; }
-    #menuBtn .bars::before, #menuBtn .bars::after, #menuBtn .bars span{
-      content:""; position:absolute; left:0; right:0; height:2px; background:#e5e7eb; border-radius:2px;
-    }
-    #menuBtn .bars::before{ top:0 } #menuBtn .bars span{ top:5px } #menuBtn .bars::after{ bottom:0 }
-
-    /* Map should take full width (no left margin) */
-    #map{ margin-left:0; }
-
-    /* Turn leftPanel into an off-canvas drawer */
-    #leftPanel{
-      transform:translateX(-100%);
-      transition:transform .25s ease;
-      width:min(88vw, 360px);
-      box-shadow: 10px 0 30px rgba(0,0,0,.45);
-    }
-    #leftPanel.open{ transform:translateX(0); }
-
-    /* Backdrop for the drawer */
-    #drawerBackdrop{
-      position:fixed; inset:0; background:rgba(0,0,0,.45);
-      z-index:1050; display:none;
-    }
-    #drawerBackdrop.open{ display:block; }
-
-    /* Bottom chart should not assume sidebar width */
-    #bottomPanel{ left:0; max-height:52vh; }
-    #chart{ height:40vh; }
+  .modal-close{
+    padding:6px 10px; border-radius:8px; border:1px solid #334155;
+    background:#1e293b; color:#f1f5f9; cursor:pointer; transition:background .2s ease;
   }
+  .modal-close:hover{ background:#334155; }
+
+  .leaflet-control.custom-info-control{ margin-bottom:8px; }
 </style>
 </head>
 <body>
-  <!-- Mobile top bar (hidden on desktop via media query) -->
-  <div id="topBar" aria-hidden="true" style="display:none">
-    <button id="menuBtn" aria-label="Open menu"><span class="bars"></span> Menu</button>
-  </div>
-  <div id="drawerBackdrop" aria-hidden="true"></div>
-
   <div id="wrap">
     <aside id="leftPanel" aria-label="Controls">
       <div class="group">
@@ -264,7 +240,7 @@
       catchments: 'data/catchments.geojson',
       csv: 'data/final_export.csv'
     };
-    const CACHE_BUST = '?v=2025-10-19b';
+    const CACHE_BUST = '?v=2025-10-19a';
 
     /* ===== Helpers ===== */
     function safeBlock(el){ try{ if(el){ L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);} }catch{} }
@@ -334,7 +310,7 @@
     map.createPane('polysPane'); const polysPane=map.getPane('polysPane'); polysPane.style.zIndex=402;
     const catchSVG = L.svg({ pane: 'catchmentsPane' });
     const polySVG  = L.svg({ pane: 'polysPane' });
-    try{ L.DomEvent.disableClickPropagation(document.getElementById('leftPanel')); L.DomEvent.disableScrollPropagation(document.getElementById('bottomPanel')); }catch{}
+    safeBlock(document.getElementById('leftPanel')); safeBlock(document.getElementById('bottomPanel'));
 
     /* ===== Styles & color ramps ===== */
     const BLUE='#4ea1ff';
@@ -353,10 +329,12 @@
     }
     const catchmentBaseStyle=(f)=>{ const p=f?.properties||{}; const n=getCatchmentName(p); const c=catchmentBaseColor(n); return {color:c,weight:2,opacity:.9,fillColor:c,fillOpacity:.16}; };
 
-    // Storage legend ramp & helpers
+    // Storage legend ramp
     const baseRamp = ['#F7FAFF','#E6F0FF','#C9DEFF','#A7C8FF','#86B2FF','#5F95FF','#3B78F0','#1C63E3'];
     function darkenHex(hex, f){
-      const h = hex.replace('#',''); const n = h.length === 3 ? h.split('').map(c=>c+c).join('') : h; const i = parseInt(n,16);
+      const h = hex.replace('#','');
+      const n = h.length === 3 ? h.split('').map(c=>c+c).join('') : h;
+      const i = parseInt(n,16);
       const r = Math.max(0, Math.round(((i>>16)&255) * (1 - f)));
       const g = Math.max(0, Math.round(((i>>8)&255)  * (1 - f)));
       const b = Math.max(0, Math.round((i&255)       * (1 - f)));
@@ -411,10 +389,6 @@
 
     // ---- Chart zoom state ----
     let zoomRange = { start: null, end: null }; // Date | null
-    const zoomStartEl = document.getElementById('zoomStart');
-    const zoomEndEl   = document.getElementById('zoomEnd');
-    const btnZoomApply = document.getElementById('btnZoomApply');
-    const btnZoomReset = document.getElementById('btnZoomReset');
 
     function parseMonthInput(v) {
       if (!v) return null;
@@ -443,22 +417,6 @@
         max: zoomRange.end ? zoomRange.end.getTime() : undefined
       };
     }
-    btnZoomApply.addEventListener('click', () => {
-      const s = parseMonthInput(zoomStartEl.value);
-      const e = parseMonthInput(zoomEndEl.value);
-      if (!s && !e) { resetZoom(); return; }
-      let start = s, end = e;
-      if (start && !end) end = start;
-      if (!start && end) start = end;
-      if (start && end && start > end) [start, end] = [end, start];
-      zoomRange = { start, end };
-      applyZoomToChart();
-    });
-    btnZoomReset.addEventListener('click', () => {
-      zoomStartEl.value = '';
-      zoomEndEl.value = '';
-      resetZoom();
-    });
 
     function drawLine(points, yLabel, title, color, xMinMax) {
       const c = color || BLUE;
@@ -483,10 +441,34 @@
       });
     }
 
+    const zoomStartEl = document.getElementById('zoomStart');
+    const zoomEndEl   = document.getElementById('zoomEnd');
+    const btnZoomApply = document.getElementById('btnZoomApply');
+    const btnZoomReset = document.getElementById('btnZoomReset');
+
+    btnZoomApply.addEventListener('click', () => {
+      const s = parseMonthInput(zoomStartEl.value);
+      const e = parseMonthInput(zoomEndEl.value);
+      if (!s && !e) { resetZoom(); return; }
+      let start = s, end = e;
+      if (start && !end) end = start;
+      if (!start && end) start = end;
+      if (start && end && start > end) [start, end] = [end, start];
+      zoomRange = { start, end };
+      applyZoomToChart();
+    });
+
+    btnZoomReset.addEventListener('click', () => {
+      zoomStartEl.value = '';
+      zoomEndEl.value = '';
+      resetZoom();
+    });
+
     let lastSelected=null;
     function metricLabel(m){ return m==='wsa' ? 'WSA' : (m==='depth' ? 'Depth' : 'Volume'); }
     function yAxisUnits(m){ return m==='wsa' ? 'WSA (ha)' : (m==='depth' ? 'Depth (m)' : 'Volume (ML)'); }
 
+    /* ===== Aggregation (sum over frames) ===== */
     function addCatchAgg(cname, tms, wsa, vol){
       if(!catchAgg.has(cname)) catchAgg.set(cname, {raw:new Map(), wsa:[], vol:[]});
       const bucket=catchAgg.get(cname);
@@ -517,6 +499,7 @@
       seriesByGEEID.set(id, bucket);
       if(!isNaN(t)){ addCatchAgg(bucket.catchment || catchName, t.getTime(), wsa, vol); }
 
+      // Build catchment membership set
       if(catchName){
         if(!catchmentToIDs.has(catchName)) catchmentToIDs.set(catchName,new Set());
         if(id) catchmentToIDs.get(catchName).add(id);
@@ -526,6 +509,7 @@
     const EPS = 1e-6, MIN_NONZERO = 3, PCTILE = 0.95;
     function computeCapacities(){
       capsByID.clear(); capsByCatch.clear();
+
       for(const [id,obj] of seriesByGEEID.entries()){
         const W = obj.rows.map(r=>r.wsa).filter(v=>Number.isFinite(v) && v>EPS);
         const D = obj.rows.map(r=>r.depth).filter(v=>Number.isFinite(v) && v>EPS);
@@ -535,6 +519,7 @@
         const volCap = (V.length>=MIN_NONZERO) ? percentile(V, PCTILE) : NaN;
         capsByID.set(id,{wsaCap, depthCap, volCap});
       }
+
       for(const [cname,setIDs] of catchmentToIDs.entries()){
         let w=0, v=0; let hw=false, hv=false;
         for(const id of setIDs){ const c=capsByID.get(id); if(!c) continue;
@@ -565,7 +550,6 @@
       let tmin=Infinity, tmax=-Infinity;
       for(const [,obj] of seriesByGEEID.entries()){
         if(!obj.rows.length) continue;
-        obj.rows.sort((a,b)=>a.t-b.t);
         tmin=Math.min(tmin, obj.rows[0].t.getTime());
         tmax=Math.max(tmax, obj.rows[obj.rows.length-1].t.getTime());
       }
@@ -633,29 +617,52 @@
         catchPct[fi]=dict;
       }
 
+      // Build chart series from frames (legacy monthly catchAgg — still used nowhere after on-demand daily, but harmless)
+      catchAgg.clear();
+      for(const cname of Object.keys(catchInterp[0]||{})){
+        const wsaSeries=[], volSeries=[];
+        for(let fi=0; fi<frameTicks.length; fi++){
+          const t = frameTicks[fi].getTime();
+          const rec = catchInterp[fi][cname];
+          if (!rec) continue;
+          if (Number.isFinite(rec.wsa)) wsaSeries.push({ x: t, y: rec.wsa });
+          if (Number.isFinite(rec.vol)) volSeries.push({ x: t, y: rec.vol });
+        }
+        catchAgg.set(cname, { wsa:wsaSeries, vol:volSeries });
+      }
+
       if(toggleTime.checked) recolorForFrame(0); else resetChoropleth();
       updateLegend();
     }
 
     /* ===== Shading helpers ===== */
-    function rampIndex(p){ if(!Number.isFinite(p)) return -1; return Math.max(0, Math.min(baseRamp.length-1, Math.round(p*(baseRamp.length-1)))); }
+    function rampIndex(p){ 
+      if(!Number.isFinite(p)) return -1;
+      return Math.max(0, Math.min(baseRamp.length-1, Math.round(p*(baseRamp.length-1))));
+    }
     function storageColor(p){ const idx = rampIndex(p); return idx>=0 ? baseRamp[idx] : '#b8c2cc'; }
     function catchmentColorFromPct(p){ const idx = rampIndex(p); return idx>=0 ? catchmentRamp[idx] : '#b8c2cc'; }
+
     function traverseAndStyle(group, callback){
-      group.eachLayer(l=>{ if (l.feature && l.setStyle) { callback(l); }
+      group.eachLayer(l=>{
+        if (l.feature && l.setStyle) { callback(l); }
         else if (l.eachLayer) { l.eachLayer(inner=>{ if(inner.feature && inner.setStyle) callback(inner); }); }
       });
     }
+
     function recolorForFrame(fi){
       if(!frameTicks.length) return;
       frameLabel.textContent='Frame: '+frameTicks[fi].toISOString().slice(0,10);
+
       const mKey = (currentMetric==='wsa'?'wsaP': currentMetric==='depth'?'depthP':'volP');
       traverseAndStyle(groups.polygons, (lyr)=> {
         const p=lyr.feature?.properties||{};
-        const id=String(p.GEEID ?? p.UNIQUEID ?? p.id ?? '').trim(); if(!id) return;
+        const id=String(p.GEEID ?? p.UNIQUEID ?? p.id ?? '').trim();
+        if(!id) return;
         const perc = polyPct[fi]?.[id]?.[mKey];
         lyr.setStyle({fillColor:storageColor(perc),fillOpacity:1.0,color:'#0a1733',weight:0.8,opacity:0.7});
       });
+
       const cKey = (currentMetric==='depth') ? 'wsaP' : (currentMetric==='wsa' ? 'wsaP' : 'volP');
       traverseAndStyle(groups.catchments, (lyr)=> {
         const cname = lyr._cname || getCatchmentName(lyr.feature?.properties||{});
@@ -667,8 +674,10 @@
           : {color:base,weight:2,opacity:.9,fillColor:base,fillOpacity:.12};
         lyr.setStyle(style);
       });
-      groups.polygons.bringToFront();
+
+      groups.polygons.bringToFront(); // storages always on top
     }
+
     function resetChoropleth(){
       traverseAndStyle(groups.polygons, (lyr)=> lyr.setStyle(STYLE_POLY));
       traverseAndStyle(groups.catchments, (lyr)=>{
@@ -692,9 +701,15 @@
     };
     legend.addTo(map);
     function buildLegendRamp(){
-      const rampEl = document.getElementById('leg-ramp'); if(!rampEl) return;
+      const rampEl = document.getElementById('leg-ramp');
+      if(!rampEl) return;
       rampEl.innerHTML = '';
-      baseRamp.forEach(c=>{ const sw=document.createElement('div'); sw.className='sw'; sw.style.background=c; rampEl.appendChild(sw); });
+      baseRamp.forEach(c=>{
+        const sw=document.createElement('div');
+        sw.className='sw';
+        sw.style.background=c;
+        rampEl.appendChild(sw);
+      });
     }
     function updateLegend(){ buildLegendRamp(); }
 
@@ -745,8 +760,11 @@
     }
 
     function finalizeCSV(){
+      // Sort rows and compute caps
       for(const [,obj] of seriesByGEEID.entries()){
-        obj.rows=obj.rows.filter(r=>r.t instanceof Date && !isNaN(r.t)).sort((a,b)=>a.t-b.t);
+        obj.rows=obj.rows
+          .filter(r=>r.t instanceof Date && !isNaN(r.t))
+          .sort((a,b)=>a.t-b.t);
       }
       finalizeCatchAgg();
       computeCapacities();
@@ -781,6 +799,8 @@
     function buildCatchmentSeriesInterpolated(cname, metric, start, end) {
       const setIDs = catchmentToIDs.get(cname) || new Set();
       if (!setIDs.size) return [];
+
+      // Determine overall domain from members
       let globalMin = Infinity, globalMax = -Infinity;
       for (const id of setIDs) {
         const bucket = seriesByGEEID.get(id);
@@ -790,16 +810,22 @@
         globalMax = Math.max(globalMax, rows[rows.length - 1].t.getTime());
       }
       if (!Number.isFinite(globalMin) || !Number.isFinite(globalMax)) return [];
+
       let tStart = start ? Math.max(start.getTime(), globalMin) : globalMin;
       let tEnd   = end   ? Math.min(end.getTime(),   globalMax) : globalMax;
       if (tEnd < tStart) [tStart, tEnd] = [tEnd, tStart];
+
+      // Adaptive daily grid, thinned to ~600 points max
       const DAY = 24*3600*1000;
       const spanDays = Math.max(1, Math.round((tEnd - tStart) / DAY));
       const maxPts = 600;
       const stepDays = Math.max(1, Math.ceil(spanDays / maxPts));
       const stepMs = stepDays * DAY;
+
       const timestamps = [];
       for (let t = tStart; t <= tEnd + 1; t += stepMs) timestamps.push(t);
+
+      // Pre-extract member rows
       const memberRows = [];
       for (const id of setIDs) {
         const bucket = seriesByGEEID.get(id);
@@ -807,9 +833,12 @@
         memberRows.push(bucket.rows);
       }
       if (!memberRows.length) return [];
+
+      // Aggregate
       const out = [];
       for (const tms of timestamps) {
-        let sum = 0, has = false;
+        let sum = 0;
+        let has = false;
         for (const rows of memberRows) {
           const v = interpMetricAt(rows, tms, metric);
           if (Number.isFinite(v)) { sum += v; has = true; }
@@ -819,171 +848,117 @@
       return out;
     }
 
-    /* ===== Panel open (true obs for storages + daily agg for catchments) ===== */
+    /* ===== Panel open (now respects true obs for storages + daily agg for catchments) ===== */
     function openPanel(sel){
       if(sel.type==='polygon'){
         const bucket = seriesByGEEID.get(sel.id);
         const key = (currentMetric==='wsa' ? 'wsa' : (currentMetric==='depth' ? 'depth' : 'vol'));
         const ptsRaw = (bucket?.rows || []).filter(r => Number.isFinite(r[key])).map(r => ({ x: r.t.getTime(), y: r[key] }));
+
         const catchName = bucket?.catchment ? ` (${bucket.catchment})` : '';
         const idPad = idFive(sel.id);
         const title = `Storage ID ${idPad}${catchName} ${metricLabel(currentMetric)} Timeseries`;
-        document.getElementById('bpTitleText').textContent = title;
+
+        bpTitleText.textContent = title;
         const t0 = ptsRaw[0]?.x, t1 = ptsRaw[ptsRaw.length-1]?.x;
-        document.getElementById('bpInfo').textContent = ptsRaw.length
+        bpInfo.textContent = ptsRaw.length
           ? ` — ${ptsRaw.length} obs${t0&&t1?`, ${new Date(t0).toISOString().slice(0,10)} → ${new Date(t1).toISOString().slice(0,10)}`:''}`
           : ' — no CSV rows.';
+
         drawLine(ptsRaw, yAxisUnits(currentMetric), title, undefined, currentXMinMax());
-        if (document.getElementById('bpTop')) document.getElementById('bpTop').style.borderBottom = '1px solid var(--border)';
+        if (bpTop) bpTop.style.borderBottom = '1px solid var(--border)';
+
       } else if (sel.type==='catchment'){
+        // Depth not aggregated; if currentMetric is depth, display WSA aggregate
         let key = currentMetric; if (key==='depth') key='wsa';
         const series = buildCatchmentSeriesInterpolated(sel.cname, key, zoomRange.start, zoomRange.end);
         const title = `${sel.cname} Aggregated ${metricLabel(key)} Timeseries`;
-        document.getElementById('bpTitleText').textContent = title;
+
+        bpTitleText.textContent = title;
         const t0 = series[0]?.x, t1 = series[series.length-1]?.x;
-        document.getElementById('bpInfo').textContent = series.length
+        bpInfo.textContent = series.length
           ? ` — ${series.length} pts${t0&&t1?`, ${new Date(t0).toISOString().slice(0,10)} → ${new Date(t1).toISOString().slice(0,10)}`:''}`
           : ' — no data in selected window.';
+
         const lineColor = catchmentBaseColor(sel.cname);
         drawLine(series, yAxisUnits(key), title, lineColor, currentXMinMax());
-        if (document.getElementById('bpTop')) document.getElementById('bpTop').style.borderBottom = `2px solid ${lineColor}`;
+        if (bpTop) bpTop.style.borderBottom = `2px solid ${lineColor}`;
       }
-      document.getElementById('bottomPanel').classList.add('open');
-      document.getElementById('bottomPanel').setAttribute('aria-hidden','false');
+
+      bottomPanel.classList.add('open');
+      bottomPanel.setAttribute('aria-hidden','false');
     }
 
     /* ===== Slider + play ===== */
     let playing=false, timer=null;
-    document.getElementById('btnPrev').addEventListener('click',()=>{ if(!toggleTime.checked) return; const i=Math.max(0,+timeSlider.value-1); timeSlider.value=i; recolorForFrame(i); });
-    document.getElementById('btnNext').addEventListener('click',()=>{ if(!toggleTime.checked) return; const i=Math.min(frameTicks.length-1,+timeSlider.value+1); timeSlider.value=i; recolorForFrame(i); });
-    document.getElementById('btnPlay').addEventListener('click',()=>{
+    timeSlider.addEventListener('input',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
+    btnPrev.addEventListener('click',()=>{ if(!toggleTime.checked) return; const i=Math.max(0,+timeSlider.value-1); timeSlider.value=i; recolorForFrame(i); });
+    btnNext.addEventListener('click',()=>{ if(!toggleTime.checked) return; const i=Math.min(frameTicks.length-1,+timeSlider.value+1); timeSlider.value=i; recolorForFrame(i); });
+    btnPlay.addEventListener('click',()=>{
       if(!toggleTime.checked) return;
-      if(playing){ playing=false; clearInterval(timer); document.getElementById('btnPlay').textContent='Play'; return; }
-      playing=true; document.getElementById('btnPlay').textContent='Pause';
+      if(playing){ playing=false; clearInterval(timer); btnPlay.textContent='Play'; return; }
+      playing=true; btnPlay.textContent='Pause';
       timer=setInterval(()=>{ let i=+timeSlider.value+1; if(i>frameTicks.length-1) i=0; timeSlider.value=i; recolorForFrame(i); }, 400);
     });
-    timeSlider.addEventListener('input',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
-    document.getElementById('toggleTime').addEventListener('change',()=>{
+    toggleTime.addEventListener('change',()=>{
       const on=toggleTime.checked; timeControls.style.display=on?'':'none';
-      if(!on){ if(playing){ playing=false; clearInterval(timer); document.getElementById('btnPlay').textContent='Play'; } resetChoropleth(); }
+      if(!on){ if(playing){ playing=false; clearInterval(timer); btnPlay.textContent='Play'; } resetChoropleth(); }
       else{ recolorForFrame(+timeSlider.value||0); }
     });
-    document.getElementById('toggleCatchChoro').addEventListener('change',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
+    toggleCatchChoro.addEventListener('change',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
 
-    /* ===== Legend build ===== */
-    const legend = L.control({position:'bottomright'});
-    function buildLegendRamp(){
-      const rampEl = document.getElementById('leg-ramp'); if(!rampEl) return;
-      rampEl.innerHTML = '';
-      ['#F7FAFF','#E6F0FF','#C9DEFF','#A7C8FF','#86B2FF','#5F95FF','#3B78F0','#1C63E3'].forEach(c=>{
-        const sw=document.createElement('div'); sw.className='sw'; sw.style.background=c; rampEl.appendChild(sw);
-      });
-    }
-    legend.onAdd = function(){
-      const div = L.DomUtil.create('div','legend');
-      div.innerHTML = `
-        <h4 id="leg-title">Shading</h4>
-        <div class="sub" id="leg-sub">Polygons & catchments shaded by percent of capacity</div>
-        <div class="ramp" id="leg-ramp"></div>
-        <div class="ticks"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
-      `;
-      return div;
-    };
-    legend.addTo(map);
-    function updateLegend(){ buildLegendRamp(); }
-
-    /* ===== Data & bootstrap ===== */
-    async function loadJSON(url){ const r=await fetch(url+CACHE_BUST); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json(); }
-    async function loadText(url){ const r=await fetch(url+CACHE_BUST); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.text(); }
-
-    function loadPolygons(gj){
-      groups.polygons.clearLayers();
-      L.geoJSON(gj,{
-        pane:'polysPane', renderer: polySVG, style:STYLE_POLY, interactive:true,
-        onEachFeature:(feature,lyr)=>{
-          const p=feature.properties||{};
-          const id=String(p.GEEID ?? p.UNIQUEID ?? p.id ?? '').trim();
-          const cname=canonicalCatchmentName(p.Catchment ?? p.Catchments ?? '');
-          if(cname){
-            if(!catchmentToIDs.has(cname)) catchmentToIDs.set(cname,new Set());
-            if(id) catchmentToIDs.get(cname).add(id);
-          }
-          lyr.on('click',()=>{ lastSelected={type:'polygon', id, props:p}; openPanel(lastSelected); });
-        }
-      }).addTo(groups.polygons);
-    }
-    function loadCatchments(gj){
-      groups.catchments.clearLayers();
-      L.geoJSON(gj,{
-        pane:'catchmentsPane', renderer: catchSVG, style:catchmentBaseStyle, interactive:true, bubblingMouseEvents:true,
-        onEachFeature:(feature,lyr)=>{
-          const cname=getCatchmentName(feature.properties||{});
-          lyr._cname = cname;
-          lyr.bindTooltip(cname, { sticky:true, direction:'top', offset:[0,-4], className:'catch-tooltip' });
-          lyr.on('click',()=>{ lastSelected={type:'catchment', cname:lyr._cname}; openPanel(lastSelected); });
-        }
-      }).addTo(groups.catchments);
-    }
-
-    async function fetchAll(){
-      detailEl.textContent='Fetching data…';
-      const [polys, cats, csvText] = await Promise.all([
-        loadJSON(DATA.polygons),
-        loadJSON(DATA.catchments),
-        loadText(DATA.csv)
-      ]);
-      detailEl.textContent='Parsing CSV…';
-      const parsed = Papa.parse(csvText,{header:true,dynamicTyping:false,skipEmptyLines:true});
-      return {polys, cats, rows: parsed.data};
-    }
-
-    function finalizeCSV(){
-      for(const [,obj] of seriesByGEEID.entries()){
-        obj.rows=obj.rows.filter(r=>r.t instanceof Date && !isNaN(r.t)).sort((a,b)=>a.t-b.t);
-      }
-      finalizeCatchAgg(); computeCapacities(); buildFramesAndInterpolation();
-      detailEl.textContent=`Loaded ✓ (${seriesByGEEID.size.toLocaleString()} storages)`;
-    }
-
-    /* Drawer (mobile only; harmless on desktop) */
-    const menuBtn = document.getElementById('menuBtn');
-    const leftPanel = document.getElementById('leftPanel');
-    const drawerBackdrop = document.getElementById('drawerBackdrop');
-    function openDrawer(){ leftPanel.classList.add('open'); drawerBackdrop.classList.add('open'); }
-    function closeDrawer(){ leftPanel.classList.remove('open'); drawerBackdrop.classList.remove('open'); }
-    if(menuBtn){ menuBtn.addEventListener('click', (e)=>{ e.stopPropagation(); openDrawer(); }); }
-    if(drawerBackdrop){ drawerBackdrop.addEventListener('click', closeDrawer); }
-    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeDrawer(); });
-
-    /* Info Modal wiring */
+    /* ===== Info Modal wiring ===== */
     const openInfoBtn = document.getElementById('openInfoBtn');
     const backdrop = document.getElementById('modalBackdrop');
     const modal = document.getElementById('infoModal');
     const modalCard = document.getElementById('modalCard');
     const modalClose = document.getElementById('modalClose');
-    function openModal(){ backdrop.classList.add('open'); modal.classList.add('open'); modal.setAttribute('aria-hidden','false'); backdrop.setAttribute('aria-hidden','false'); document.body.style.overflow = 'hidden'; }
-    function closeModal(){ backdrop.classList.remove('open'); modal.classList.remove('open'); modal.setAttribute('aria-hidden','true'); backdrop.setAttribute('aria-hidden','true'); document.body.style.overflow = ''; }
+
+    function openModal(){
+      backdrop.classList.add('open');
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden','false');
+      backdrop.setAttribute('aria-hidden','false');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeModal(){
+      backdrop.classList.remove('open');
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden','true');
+      backdrop.setAttribute('aria-hidden','true');
+      document.body.style.overflow = '';
+    }
     if (openInfoBtn) openInfoBtn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); openModal(); });
     if (modalClose)  modalClose .addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeModal(); });
     if (backdrop)    backdrop   .addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeModal(); });
     if (modalCard)   modalCard  .addEventListener('click', (e)=>{ e.stopPropagation(); });
     if (modal)       modal      .addEventListener('click', (e)=>{ e.stopPropagation(); });
 
-    /* Start */
+    /* ===== Start ===== */
     async function bootstrap(){
       try{
         const {polys, cats, rows} = await fetchAll();
-        loadPolygons(polys); loadCatchments(cats);
+        loadPolygons(polys);
+        loadCatchments(cats);
+
         seriesByGEEID.clear(); catchAgg.clear(); frameTicks=[]; polyInterp={}; catchInterp={}; polyPct={}; catchPct={}; capsByID.clear(); capsByCatch.clear();
-        rows.forEach(handleCSVRow); finalizeCSV();
+        rows.forEach(handleCSVRow);
+        finalizeCSV();
+
         try{ const b=L.featureGroup([groups.polygons,groups.catchments]).getBounds(); if(b.isValid()) map.fitBounds(b.pad(0.05)); }catch{}
+
+        // Build legend now that DOM exists
         updateLegend();
+
+        // Auto-open the information modal on load
         openModal();
+
       }catch(e){
         console.error(e);
         detailEl.textContent='Error loading data: '+ e.message + ' — check file names/paths and GitHub Pages case-sensitivity.';
       }
     }
+
     window.addEventListener('load', bootstrap);
   </script>
 </body>
