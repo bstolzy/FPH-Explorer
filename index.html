@@ -940,9 +940,7 @@
 
     /* ===== Slider + play ===== */
     let playing=false, timer=null;
-    const timeSlider=document.getElementById('timeSlider');
-    const frameLabel=document.getElementById('frameLabel');
-    const btnPrev=document.getElementById('btnPrev'), btnNext=document.getElementById('btnNext'), btnPlay=document.getElementById('btnPlay');
+   
 
     timeSlider.addEventListener('input',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
     btnPrev.addEventListener('click',()=>{ if(!toggleTime.checked) return; const i=Math.max(0,+timeSlider.value-1); timeSlider.value=i; recolorForFrame(i); });
