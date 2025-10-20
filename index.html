@@ -240,7 +240,7 @@
       catchments: 'data/catchments.geojson',
       csv: 'data/final_export.csv'
     };
-    const CACHE_BUST = '?v=2025-10-19a';
+    const CACHE_BUST = '?v=2025-10-19b'; /* bump for cache */
 
     /* ===== Helpers ===== */
     function safeBlock(el){ try{ if(el){ L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);} }catch{} }
@@ -427,16 +427,22 @@
           data:points, parsing:false,
           borderColor:c, backgroundColor:'transparent',
           borderWidth:2, tension:0, spanGaps:false,
-          pointRadius:0, pointHitRadius:6, pointHoverRadius:3
+          pointRadius:0, pointHitRadius:0, pointHoverRadius:0
         }]},
         options:{
           animation:false, maintainAspectRatio:false, parsing:false,
+          events: [],                /* 👈 disable all pointer events */
+          interaction:{mode:'none'}, /* 👈 no hover/click interaction */
           scales:{
             x:{ type:'time', time:{unit:'month'}, ticks:{color:'#dfe6f5'}, grid:{color:'rgba(255,255,255,0.22)'},
                 min:xMinMax?.min, max:xMinMax?.max },
             y:{ min:0, ticks:{color:'#dfe6f5'}, grid:{color:'rgba(255,255,255,0.22)'}, title:{display:true,text:yLabel,color:'#e5e7eb'} }
           },
-          plugins:{ legend:{display:false}, title:{display:true,text:title,color:'#fff',align:'center',font:{weight:'600',size:16}} }
+          plugins:{
+            tooltip:{ enabled:false },   /* 👈 remove cursor pop-up */
+            legend:{display:false},
+            title:{display:true,text:title,color:'#fff',align:'center',font:{weight:'600',size:16}}
+          }
         }
       });
     }
@@ -618,7 +624,7 @@
         catchPct[fi]=dict;
       }
 
-      // Build chart series from frames (legacy monthly catchAgg — still used nowhere after on-demand daily, but harmless)
+      // Legacy monthly series cache for map-only use
       catchAgg.clear();
       for(const cname of Object.keys(catchInterp[0]||{})){
         const wsaSeries=[], volSeries=[];
@@ -777,7 +783,6 @@
     function floorLocalDay(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
 
     function reducePerDayMean(rows, key){
-      // rows share the same calendar day; key ∈ {'wsa','depth','vol'}
       let s=0, n=0;
       for(const r of rows){
         const v = r[key];
@@ -787,8 +792,8 @@
     }
 
     function dailySeriesFromRows(rows, key){
-      // 1) group per GEEID per LOCAL day; 2) reducer=mean; 3) for 'vol', convert ML→GL
-      const dayMap = new Map(); // dayMs -> [rows...]
+      // group per local day; mean; for 'vol' convert ML→GL
+      const dayMap = new Map();
       for(const r of rows){
         const d = floorLocalDay(r.t).getTime();
         if(!dayMap.has(d)) dayMap.set(d, []);
@@ -805,24 +810,19 @@
     }
 
     function interpolateDailyInside(series){
-      // series: sorted [{x:dayMs, y:Number}], daily grid from first→last, linear inside only
       if(!series.length) return [];
       const DAY = 24*3600*1000;
       const start = series[0].x, end = series[series.length-1].x;
       const byDay = new Map(series.map(p=>[p.x, p.y]));
       const res = [];
-
-      // Walk each day; if missing, linearly interpolate using bracketing known days
-      // Precompute indices of known days
       const known = series.map(p=>p.x);
-      let i = 0; // pointer to next known
+      let i = 0;
       for(let t = start; t <= end; t += DAY){
         if(byDay.has(t)){ res.push({x:t, y:byDay.get(t)}); while(i < known.length && known[i] < t) i++; continue; }
-        // Find bracketing known days
         while(i < known.length && known[i] < t) i++;
         const hi = (i < known.length) ? known[i] : null;
         const lo = (i-1 >= 0) ? known[i-1] : null;
-        if(lo===null || hi===null){ /* outside range → no extrapolation */ continue; }
+        if(lo===null || hi===null) continue; // inside only
         const y0 = byDay.get(lo), y1 = byDay.get(hi);
         if(!Number.isFinite(y0) || !Number.isFinite(y1)) continue;
         const w = (t - lo) / (hi - lo);
@@ -832,11 +832,9 @@
     }
 
     function buildCatchmentSeriesPythonParity(cname, key, start, end){
-      // key: 'wsa' | 'depth' | 'vol' (vol returned in GL)
       const setIDs = catchmentToIDs.get(cname) || new Set();
       if(!setIDs.size) return [];
 
-      // Build per-storage daily mean series, then interpolate inside gaps
       const perStorage = [];
       for(const id of setIDs){
         const bucket = seriesByGEEID.get(id);
@@ -848,14 +846,12 @@
       }
       if(!perStorage.length) return [];
 
-      // Global domain across members (no extrapolation)
       let gMin = Infinity, gMax = -Infinity;
       for(const s of perStorage){ gMin = Math.min(gMin, s[0].x); gMax = Math.max(gMax, s[s.length-1].x); }
       if(!Number.isFinite(gMin) || !Number.isFinite(gMax)) return [];
 
-      // Optional clip to requested range
-      if(start instanceof Date) gMin = Math.max(gMin, floorLocalDay(start).getTime());
-      if(end   instanceof Date) gMax = Math.min(gMax, floorLocalDay(end).getTime());
+      if(start instanceof Date) gMin = Math.max(gMin, new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime());
+      if(end   instanceof Date) gMax = Math.min(gMax,   new Date(end.getFullYear(),   end.getMonth(),   end.getDate()).getTime());
       if(gMax < gMin) [gMin, gMax] = [gMax, gMin];
 
       const DAY = 24*3600*1000;
@@ -863,26 +859,20 @@
       const maxPts = 600;
       const stepDays = Math.max(1, Math.ceil(spanDays / maxPts));
 
-      // Build a quick cursor for each storage series
       const cursors = perStorage.map(s => ({ s, i:0 }));
-
       const out = [];
       for(let t = gMin; t <= gMax + 1; t += stepDays*DAY){
         let sum = 0, has = false;
-
         for(const c of cursors){
           const s = c.s;
-          // advance cursor to first point with x >= t
           while(c.i < s.length && s[c.i].x < t) c.i++;
           const cur = s[c.i];
           if(cur && cur.x === t){
             if(Number.isFinite(cur.y)){ sum += cur.y; has = true; }
           } else {
-            // try exact day lookup behind
             const prev = (c.i > 0) ? s[c.i - 1] : null;
             const next = cur || null;
             if(prev && next && prev.x < t && next.x > t){
-              // linear within an already-interpolated daily series → both sides exist (shouldn't happen often)
               const w = (t - prev.x) / (next.x - prev.x);
               const y = prev.y + w*(next.y - prev.y);
               if(Number.isFinite(y)){ sum += y; has = true; }
@@ -891,7 +881,6 @@
             }
           }
         }
-
         if(has) out.push({ x:t, y:sum });
       }
       return out;
@@ -918,8 +907,7 @@
         if (bpTop) bpTop.style.borderBottom = '1px solid var(--border)';
 
       } else if (sel.type==='catchment'){
-        // Depth not aggregated; if depth chosen, switch to WSA for chart (consistent with prior behaviour)
-        let key = currentMetric; if (key==='depth') key='wsa';
+        let key = currentMetric; if (key==='depth') key='wsa'; // depth not aggregated
         const series = buildCatchmentSeriesPythonParity(sel.cname, key, zoomRange.start, zoomRange.end);
         const title = `${sel.cname} Aggregated ${metricLabel(key)} Timeseries`;
 
@@ -940,8 +928,6 @@
 
     /* ===== Slider + play ===== */
     let playing=false, timer=null;
-   
-
     timeSlider.addEventListener('input',()=>{ if(toggleTime.checked) recolorForFrame(+timeSlider.value); });
     btnPrev.addEventListener('click',()=>{ if(!toggleTime.checked) return; const i=Math.max(0,+timeSlider.value-1); timeSlider.value=i; recolorForFrame(i); });
     btnNext.addEventListener('click',()=>{ if(!toggleTime.checked) return; const i=Math.min(frameTicks.length-1,+timeSlider.value+1); timeSlider.value=i; recolorForFrame(i); });
