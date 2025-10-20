@@ -205,11 +205,25 @@
   <div id="modalBackdrop" class="modal-backdrop" aria-hidden="true"></div>
   <div id="infoModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="infoTitle" aria-hidden="true">
     <div id="modalCard" class="modal-card">
+
       <h2 id="infoTitle">Information</h2>
+
       <h3>🌊 <strong>Floodplain Harvesting Introduction</strong></h3>
-      <p>The Murray–Darling Basin (MDB) is Australia’s largest river system…</p>
+      <p>The Murray–Darling Basin (MDB) is Australia’s largest river system and the heart of the country’s agricultural production. In the north of the Basin, large floods spill across floodplains where water can be captured in on-farm storages, sometimes tens of hectares in size. This practice, known as <em>floodplain harvesting</em>, helps farmers secure water for irrigation and improve reliability for crops and regional communities. However, capturing this water before it returns to rivers can reduce downstream flows that are vital for towns, wetlands, and floodplain ecosystems.</p>
+      <p>Despite decades of discussion, <strong>no one really knows how impactful floodplain harvesting is across the Basin</strong>. Do the benefits for farmers, crop yields, and local economies outweigh the costs to downstream environments and communities? <strong>Until now, this has been impossible to properly assess due to the lack of consistent, measurable data.</strong></p>
+      <p>This project uses observations from the <strong>Sentinel-2</strong> and <strong>SWOT</strong> satellites to map water surface areas, estimate depths, and calculate volumes for thousands of individual storages across the MDB. It represents <strong>the first public release of Basin-wide estimates of storage dynamics derived from satellite data</strong>.</p>
+
       <h3>🛰️ <strong>Online Tool Functionality</strong></h3>
-      <p>This interactive tool displays floodplain <strong>storage-level</strong> and <strong>catchment-level</strong> data…</p>
+      <p>This interactive tool displays floodplain <strong>storage-level</strong> and <strong>catchment-level</strong> data. Each <strong>storage</strong> is shown as its own area on the map, while the larger coloured outlines represent <strong>catchments</strong> that aggregate storage behaviour across regions.</p>
+      <ul>
+       <li>Use the <strong>time slider</strong> to see how water surface area, depth, and volume change month by month.</li>
+       <li>Toggle between <strong>WSA</strong>, <strong>Depth</strong>, and <strong>Volume</strong> to explore different metrics.</li>
+       <li>Click any <strong>storage</strong> or <strong>catchment</strong> to view its time-series chart.</li>
+       <li>Compare shading intensity to understand how full each storage is. Storages are opaque and match the legend exactly; catchments are slightly transparent but appear visually similar.</li>
+      </ul>
+      <p><strong>This tool provides the first Basin-wide, publicly accessible visualisation of floodplain harvesting behaviour.</strong></p>
+      <p>Look out for the massive flooding in 2022 and enjoy exploring!</p>
+
       <div class="modal-actions">
         <button id="modalClose" class="modal-close" type="button">Close</button>
       </div>
