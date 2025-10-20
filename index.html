@@ -227,7 +227,7 @@
       catchments: 'data/catchments.geojson',
       csv: 'data/final_export.csv'
     };
-    const CACHE_BUST = '?v=2025-10-19c'; /* bump for cache */
+    const CACHE_BUST = '?v=2025-10-20a'; /* bump for cache */
 
     /* ===== Helpers ===== */
     function safeBlock(el){ try{ if(el){ L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el);} }catch{} }
@@ -484,7 +484,7 @@
       const idRaw=row['GEEID']; if(!idRaw) return; const id=String(idRaw).trim();
       const t=parseTime(row['Timestamp']);
       const wsa=parseNumber(row['WSA (ha)']);
-      const depth=parseNumber(row['Depth (m)']);
+      const depth=parseNumber(row['Depth (m)'] ?? row['Depth_m']);
       const vol=parseNumber(row['Volume (ML)']);
       const catchName=canonicalCatchmentName(row['Catchment'] ?? row['Catchments'] ?? '');
       const bucket=seriesByGEEID.get(id) || {rows:[], catchment:catchName};
@@ -724,7 +724,7 @@
       return out;
     }
 
-    /* ===== Map recolor (unchanged) ===== */
+    /* ===== Shading helpers ===== */
     function rampIndex(p){ 
       if(!Number.isFinite(p)) return -1;
       return Math.max(0, Math.min(baseRamp.length-1, Math.round(p*(baseRamp.length-1))));
@@ -775,6 +775,33 @@
       });
       groups.polygons.bringToFront();
     }
+
+    /* ===== Legend control & functions (RESTORED) ===== */
+    const legend = L.control({position:'bottomright'});
+    legend.onAdd = function(){
+      const div = L.DomUtil.create('div','legend');
+      div.innerHTML = `
+        <h4 id="leg-title">Shading</h4>
+        <div class="sub" id="leg-sub">Polygons & catchments shaded by percent of capacity</div>
+        <div class="ramp" id="leg-ramp"></div>
+        <div class="ticks"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+      `;
+      return div;
+    };
+    legend.addTo(map);
+
+    function buildLegendRamp(){
+      const rampEl = document.getElementById('leg-ramp');
+      if(!rampEl) return;
+      rampEl.innerHTML = '';
+      baseRamp.forEach(c=>{
+        const sw=document.createElement('div');
+        sw.className='sw';
+        sw.style.background=c;
+        rampEl.appendChild(sw);
+      });
+    }
+    function updateLegend(){ buildLegendRamp(); }
 
     /* ===== Data loading & layer creation ===== */
     async function loadJSON(url){ const r=await fetch(url+CACHE_BUST); if(!r.ok) throw new Error(`${r.status} ${r.statusText}`); return r.json(); }
@@ -834,6 +861,35 @@
       buildFramesAndInterpolation();
       detailEl.textContent=`Loaded ✓ (${seriesByGEEID.size.toLocaleString()} storages)`;
     }
+
+    /* ===== Modal wiring (RESTORED) ===== */
+    const openInfoBtn = document.getElementById('openInfoBtn');
+    const backdrop = document.getElementById('modalBackdrop');
+    const modal = document.getElementById('infoModal');
+    const modalCard = document.getElementById('modalCard');
+    const modalClose = document.getElementById('modalClose');
+
+    function openModal(){
+      if(!backdrop || !modal) return;
+      backdrop.classList.add('open');
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden','false');
+      backdrop.setAttribute('aria-hidden','false');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeModal(){
+      if(!backdrop || !modal) return;
+      backdrop.classList.remove('open');
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden','true');
+      backdrop.setAttribute('aria-hidden','true');
+      document.body.style.overflow = '';
+    }
+    if (openInfoBtn) openInfoBtn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); openModal(); });
+    if (modalClose)  modalClose .addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeModal(); });
+    if (backdrop)    backdrop   .addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); closeModal(); });
+    if (modalCard)   modalCard  .addEventListener('click', (e)=>{ e.stopPropagation(); });
+    if (modal)       modal      .addEventListener('click', (e)=>{ e.stopPropagation(); });
 
     /* ===== Panel open (storage raw; catchment = python-parity daily agg) ===== */
     function openPanel(sel){
